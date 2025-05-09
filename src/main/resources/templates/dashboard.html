@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard | LMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(45deg, #1a1a1a, #4a4a4a);
+            color: #ffffff;
+        }
+
+        .navbar {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+        }
+
+        .navbar-brand {
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .nav-link {
+            color: #ffffff;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: #007bff;
+        }
+
+        .dashboard-container {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .welcome-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .user-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #007bff, #00bcd4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .user-details h2 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+
+        .user-details p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            background: rgba(0, 123, 255, 0.2);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: #007bff;
+            margin-top: 0.5rem;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 1.5rem;
+            transition: transform 0.3s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-title {
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: #ffffff;
+        }
+
+        .card-content {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .logout-btn {
+            background: linear-gradient(45deg, #dc3545, #ff4d4d);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">LMS Dashboard</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="logout()">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <div class="welcome-card">
+            <div class="user-info">
+                <div class="user-avatar" th:text="${#strings.substring(user.name, 0, 1)}"></div>
+                <div class="user-details">
+                    <h2 th:text="${user.name}">User Name</h2>
+                    <p th:text="${user.email}">user@email.com</p>
+                    <span class="role-badge" th:text="${user.role}">ROLE</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <h3 class="card-title">My Courses</h3>
+                <p class="card-content">View and manage your enrolled courses</p>
+            </div>
+            <div class="dashboard-card">
+                <h3 class="card-title">Assignments</h3>
+                <p class="card-content">Check your pending and completed assignments</p>
+            </div>
+            <div class="dashboard-card">
+                <h3 class="card-title">Grades</h3>
+                <p class="card-content">View your academic progress and grades</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Store the token when received
+        function storeToken(token) {
+            localStorage.setItem('jwt_token', token);
+        }
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('jwt_token');
+            window.location.href = '/login';
+        }
+
+        // Check if token exists
+        const token = localStorage.getItem('jwt_token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Add token to all API requests
+        function addTokenToRequests() {
+            const token = localStorage.getItem('jwt_token');
+            if (token) {
+                // Add token to all fetch requests
+                const originalFetch = window.fetch;
+                window.fetch = function() {
+                    let [resource, config] = arguments;
+                    if (config === undefined) {
+                        config = {};
+                    }
+                    if (config.headers === undefined) {
+                        config.headers = {};
+                    }
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                    return originalFetch(resource, config);
+                };
+            }
+        }
+
+        // Initialize
+        addTokenToRequests();
+    </script>
+</body>
+</html> 

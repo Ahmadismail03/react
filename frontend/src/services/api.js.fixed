@@ -1,0 +1,70 @@
+import axios from 'axios'
+
+// Configure axios with base URL
+axios.defaults.baseURL = 'http://localhost:8081'
+
+// Course API endpoints
+export const courseApi = {
+  getAllCourses: () => axios.get('/courses'),
+  getInstructorCourses: () => axios.get('/courses/instructor'),
+  getCourseById: (id) => axios.get(`/courses/${id}`),
+  createCourse: (courseData) => axios.post('/courses', courseData),
+  updateCourse: (id, courseData) => axios.put(`/courses/${id}`, courseData),
+  deleteCourse: (id) => axios.delete(`/courses/${id}`),
+  enrollInCourse: (courseId) => axios.post(`/courses/${courseId}/enroll`),
+  getCourseStudents: (courseId) => axios.get(`/courses/${courseId}/students`),
+}
+
+// Content API endpoints
+export const contentApi = {
+  getContentByCourse: (courseId) => axios.get(`/api/content/course/${courseId}`),
+  uploadContent: (contentData) => {
+    const formData = new FormData()
+    for (const [key, value] of Object.entries(contentData)) {
+      formData.append(key, value)
+    }
+    return axios.post(`/api/content/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  deleteContent: (contentId) => axios.delete(`/api/content/${contentId}`),
+}
+
+// Assessment API endpoints
+export const assessmentApi = {
+  getAssessmentsByCourse: (courseId) => axios.get(`/api/assessment/course/${courseId}`),
+  createAssessment: (assessmentData) =>
+    axios.post(`/api/assessment/create`, assessmentData),
+  getAssessment: (assessmentId) => axios.get(`/api/assessment/${assessmentId}`),
+  submitAssessment: (assessmentId, submissionData) =>
+    axios.post(`/api/assessment/${assessmentId}/submit`, submissionData),
+  gradeAssessment: (submissionId, gradeData) =>
+    axios.post(`/api/assessment/submissions/${submissionId}/grade`, gradeData),
+}
+
+// Enrollment API endpoints
+export const enrollmentApi = {
+  getMyEnrollments: () => axios.get('/enrollments/my'),
+  getEnrollmentProgress: (enrollmentId) => axios.get(`/enrollments/${enrollmentId}/progress`),
+  updateProgress: (enrollmentId, progressData) =>
+    axios.put(`/enrollments/${enrollmentId}/progress`, progressData),
+}
+
+// User API endpoints
+export const userApi = {
+  getCurrentUser: () => axios.get('/users/me'),
+  updateProfile: (userData) => axios.put('/users/profile', userData),
+  changePassword: (passwordData) => axios.post('/auth/change-password', passwordData),
+  uploadProfilePicture: (formData) => axios.post('/users/profile/picture', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+}
+
+// Auth API endpoints
+export const authApi = {
+  login: (credentials) => axios.post('/auth/login', credentials),
+  register: (userData) => axios.post('/auth/register', userData),
+  forgotPassword: (email) => axios.post('/auth/forgot-password', { email }),
+  refreshToken: (refreshToken) => axios.post('/auth/refresh', { refreshToken }),
+  logout: () => axios.post('/auth/logout'),
+}

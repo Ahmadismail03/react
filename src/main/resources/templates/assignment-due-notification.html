@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Assignment Due Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #FF5722;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        .content {
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .details {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #fff;
+            border-left: 4px solid #FF5722;
+        }
+        .deadline {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #FF5722;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Assignment Due Reminder</h1>
+    </div>
+    <div class="content">
+        <h2 th:text="${assignmentName}">Assignment Name</h2>
+        
+        <div class="details">
+            <p><strong>Course:</strong> <span th:text="${courseName}">Course Name</span></p>
+            <p><strong>Due Date:</strong> <span class="deadline" th:text="${dueDate}">Due Date</span></p>
+            <p><strong>Time Remaining:</strong> <span th:text="${timeRemaining}">Time Remaining</span></p>
+        </div>
+
+        <div th:if="${description}">
+            <h3>Assignment Description:</h3>
+            <p th:text="${description}">Assignment description will appear here.</p>
+        </div>
+
+        <div>
+            <h3>Submission Instructions:</h3>
+            <p th:text="${submissionInstructions}">Submission instructions will appear here.</p>
+        </div>
+
+        <a th:href="${assignmentUrl}" class="button">View Assignment</a>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from the LMS system. Please do not reply to this email.</p>
+        <p>If you have any questions, please contact your course instructor.</p>
+    </div>
+</body>
+</html>

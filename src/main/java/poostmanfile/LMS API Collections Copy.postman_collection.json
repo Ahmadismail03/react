@@ -1,0 +1,438 @@
+{
+	"info": {
+		"_postman_id": "9cc1c91d-d6ed-4f39-8013-ace18b030113",
+		"name": "LMS API Collections Copy",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json",
+		"_exporter_id": "41763360"
+	},
+	"item": [
+		{
+			"name": "ASF_Student",
+			"item": [
+				{
+					"name": "Authentication",
+					"item": [
+						{
+							"name": "Login",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"newsvftudvvent@example.com\",\n  \"password\": \"password123\"\n\n}"
+								},
+								"url": "{{base_url}}/api/auth/login"
+							},
+							"response": []
+						},
+						{
+							"name": "Register",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"New Student\",\n  \"email\": \"newsvftudvvent@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"STUDENT\"\n}"
+								},
+								"url": "{{base_url}}/api/auth/register"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Courses",
+					"item": [
+						{
+							"name": "Get All Courses",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{student_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/courses"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Course by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{student_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/courses/1"
+							},
+							"response": []
+						},
+						{
+							"name": "Enroll in Course",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{student_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"courseId\": 4,\r\n  \"studentId\": 3\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/enrollments?courseId=22",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"enrollments"
+									],
+									"query": [
+										{
+											"key": "courseId",
+											"value": "22"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Content",
+					"item": [
+						{
+							"name": "Get Course Content",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{student_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/content/course/1"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Content by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{student_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/content/1"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ASF_Teacher",
+			"item": [
+				{
+					"name": "Authentication",
+					"item": [
+						{
+							"name": "Register Teacher",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Teacher Name\",\n  \"email\": \"teachtioiiryyyyyytyyyyffer@example.com\",\n  \"password\": \"passworetertrod123\",\n  \"role\": \"INSTRUCTOR\"\n}"
+								},
+								"url": "{{base_url}}/api/auth/register"
+							},
+							"response": []
+						},
+						{
+							"name": "Login",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"teachtryyyyyytyyyyffer@example.com\",\n  \"password\": \"passworetertrod123\"\n}"
+								},
+								"url": "{{base_url}}/api/auth/login"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Courses",
+					"item": [
+						{
+							"name": "Create Course",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{teacher_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Math 101\",\n  \"description\": \"Basic Mathematics\",\n  \"startDate\": \"2025-01-01\",\n  \"endDate\": \"2025-06-01\",\n  \"title\": \"Introduction to Mathematics\",\n  \"instructorId\": 1\n}"
+								},
+								"url": "{{base_url}}/api/courses"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Course",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{teacher_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Math 101\",\n  \"description\": \"Updated Basic Mathematics\",\n  \"startDate\": \"2025-01-01\",\n  \"endDate\": \"2025-06-01\",\n  \"title\": \"Introduction to Mathematics\",\n  \"instructorId\": 1\n}"
+								},
+								"url": "{{base_url}}/api/courses/1"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Content",
+					"item": [
+						{
+							"name": "Upload Content",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{teacher_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"courseId\": 1,\n  \"type\": \"PDF\",\n  \"urlFileLocation\": \"https://example.com/math101/lesson1.pdf\",\n  \"fileSize\": 2048,\n  \"fileType\": \"application/pdf\",\n  \"description\": \"Lesson 1: Introduction to Algebra\"\n}"
+								},
+								"url": "{{base_url}}/api/content/upload"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "ASF_Admin",
+			"item": [
+				{
+					"name": "Authentication",
+					"item": [
+						{
+							"name": "Register Admin",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Admin Name\",\n  \"email\": \"addmin@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"ADMIN\"\n}"
+								},
+								"url": "{{base_url}}/api/auth/register"
+							},
+							"response": []
+						},
+						{
+							"name": "Login",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"addmin@example.com\",\n  \"password\": \"password123\"\n\n}"
+								},
+								"url": "{{base_url}}/api/auth/login"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "User Management",
+					"item": [
+						{
+							"name": "Get All Users",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/users"
+							},
+							"response": []
+						},
+						{
+							"name": "Update User Role",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/users/1/role?role=ADMIN",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"users",
+										"1",
+										"role"
+									],
+									"query": [
+										{
+											"key": "role",
+											"value": "ADMIN"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Course Management",
+					"item": [
+						{
+							"name": "Get All Courses",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/courses"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Course",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{admin_token}}"
+									}
+								],
+								"url": "{{base_url}}/api/courses/2"
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8081"
+		},
+		{
+			"key": "student_token",
+			"value": "your_student_jwt_token_here"
+		},
+		{
+			"key": "teacher_token",
+			"value": "your_teacher_jwt_token_here"
+		},
+		{
+			"key": "admin_token",
+			"value": "your_admin_jwt_token_here"
+		}
+	]
+}
