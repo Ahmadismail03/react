@@ -9,6 +9,7 @@ import com.example.soa.mapper.CourseMapper;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import com.example.soa.Service.CourseService;
 import com.example.soa.Service.UserService;
@@ -34,6 +35,7 @@ public class CourseController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<CourseDTO> createCourse(@RequestBody CourseDTO courseDTO) {
         logger.info("Creating new course with title: {}", courseDTO.getTitle());
         
@@ -60,12 +62,16 @@ public class CourseController {
         User currentUser = courseService.getCurrentUser();
         
         // If instructor ID is not provided in the request, set the current user as instructor
-        // This allows admins to specify a different instructor when creating a course
         if (courseDTO.getInstructorId() == null) {
             courseDTO.setInstructorId(currentUser.getUserId());
             logger.info("Setting instructor ID to current user: {}", currentUser.getUserId());
         } else {
-            // Verify that the specified instructor exists
+            // Only ADMIN can set a different instructor
+            if (!currentUser.getRole().equals(User.Role.ADMIN) && 
+                !courseDTO.getInstructorId().equals(currentUser.getUserId())) {
+                logger.warn("Non-admin user trying to set different instructor");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
             logger.info("Using provided instructor ID: {}", courseDTO.getInstructorId());
         }
         
@@ -73,7 +79,8 @@ public class CourseController {
         Course createdCourse = courseService.createCourse(course);
         CourseDTO createdCourseDTO = courseMapper.toCourseDTO(createdCourse);
         try {
-            createdCourseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class).getCourseById(createdCourse.getCourseId())).withSelfRel());
+            createdCourseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class)
+                .getCourseById(createdCourse.getCourseId())).withSelfRel());
         } catch (Exception e) {
             logger.warn("Could not add HATEOAS link to response: {}", e.getMessage());
         }
@@ -91,7 +98,8 @@ public class CourseController {
         try {
             courseDTOs.forEach(dto -> {
                 try {
-                    dto.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class).getCourseById(dto.getCourseId())).withSelfRel());
+                    dto.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class)
+                        .getCourseById(dto.getCourseId())).withSelfRel());
                 } catch (Exception e) {
                     logger.warn("Could not add HATEOAS link to course DTO: {}", e.getMessage());
                 }
@@ -104,13 +112,20 @@ public class CourseController {
     }
 
     @GetMapping("/instructor")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<List<CourseDTO>> getInstructorCourses() {
         logger.info("Fetching courses for instructor");
         // Get the currently authenticated user
         User currentUser = courseService.getCurrentUser();
         
-        // Get courses where this user is the instructor
-        List<Course> courses = courseService.getCoursesByInstructor(currentUser.getUserId());
+        List<Course> courses;
+        if (currentUser.getRole().equals(User.Role.ADMIN)) {
+            // Admins can see all courses
+            courses = courseService.getAllCourses();
+        } else {
+            // Instructors see only their courses
+            courses = courseService.getCoursesByInstructor(currentUser.getUserId());
+        }
         
         List<CourseDTO> courseDTOs = courses.stream()
                 .map(courseMapper::toCourseDTO)
@@ -119,7 +134,8 @@ public class CourseController {
         try {
             courseDTOs.forEach(dto -> {
                 try {
-                    dto.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class).getCourseById(dto.getCourseId())).withSelfRel());
+                    dto.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class)
+                        .getCourseById(dto.getCourseId())).withSelfRel());
                 } catch (Exception e) {
                     logger.warn("Could not add HATEOAS link to course DTO: {}", e.getMessage());
                 }
@@ -138,7 +154,8 @@ public class CourseController {
         Course course = courseService.getCourseById(courseId);
         CourseDTO courseDTO = courseMapper.toCourseDTO(course);
         try {
-            courseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class).getCourseById(courseId)).withSelfRel());
+            courseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class)
+                .getCourseById(courseId)).withSelfRel());
         } catch (Exception e) {
             logger.warn("Could not add HATEOAS link to response: {}", e.getMessage());
         }
@@ -147,6 +164,7 @@ public class CourseController {
     }
 
     @PutMapping("/{courseId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
     public ResponseEntity<CourseDTO> updateCourse(@PathVariable Long courseId, @RequestBody CourseDTO courseDTO) {
         logger.info("Updating course with ID: {}", courseId);
         
@@ -159,12 +177,24 @@ public class CourseController {
         // Set the course ID from the path variable to ensure consistency
         courseDTO.setCourseId(courseId);
         
+        // Check if user has permission to update this course
+        User currentUser = courseService.getCurrentUser();
+        Course existingCourse = courseService.getCourseById(courseId);
+        
+        // Only course instructor or admin can update the course
+        if (!currentUser.getRole().equals(User.Role.ADMIN) && 
+            !existingCourse.getInstructor().getUserId().equals(currentUser.getUserId())) {
+            logger.warn("User {} trying to update course they don't own", currentUser.getUserId());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
         try {
             Course course = courseMapper.toCourse(courseDTO);
             Course updatedCourse = courseService.updateCourse(courseId, course);
             CourseDTO updatedCourseDTO = courseMapper.toCourseDTO(updatedCourse);
             try {
-                updatedCourseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class).getCourseById(updatedCourse.getCourseId())).withSelfRel());
+                updatedCourseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class)
+                    .getCourseById(updatedCourse.getCourseId())).withSelfRel());
             } catch (Exception e) {
                 logger.warn("Could not add HATEOAS link to response: {}", e.getMessage());
             }
@@ -180,6 +210,7 @@ public class CourseController {
     }
 
     @DeleteMapping("/{courseId}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> deleteCourse(@PathVariable Long courseId) {
         logger.info("Deleting course with ID: {}", courseId);
         
@@ -203,12 +234,14 @@ public class CourseController {
     }
 
     @PutMapping("/{courseId}/assignInstructor")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<CourseDTO> assignInstructor(@PathVariable Long courseId, @RequestParam Long instructorId) {
         logger.info("Assigning instructor with ID: {} to course with ID: {}", instructorId, courseId);
         Course course = courseService.assignInstructor(courseId, instructorId);
         CourseDTO courseDTO = courseMapper.toCourseDTO(course);
         try {
-            courseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class).getCourseById(course.getCourseId())).withSelfRel());
+            courseDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(CourseController.class)
+                .getCourseById(course.getCourseId())).withSelfRel());
         } catch (Exception e) {
             logger.warn("Could not add HATEOAS link to response: {}", e.getMessage());
         }

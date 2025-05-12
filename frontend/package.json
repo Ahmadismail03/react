@@ -15,15 +15,16 @@
     "@mui/icons-material": "^5.15.10",
     "@mui/material": "^5.15.10",
     "axios": "^1.6.7",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.1",
-    "three": "^0.161.0",
-    "framer-motion": "^11.0.5",
-    "react-query": "^3.39.3",
     "date-fns": "^3.3.1",
+    "framer-motion": "^11.0.5",
+    "react": "^18.2.0",
+    "react-beautiful-dnd": "^13.1.1",
+    "react-dom": "^18.2.0",
     "react-hook-form": "^7.50.1",
-    "react-toastify": "^10.0.4"
+    "react-query": "^3.39.3",
+    "react-router-dom": "^6.22.1",
+    "react-toastify": "^10.0.4",
+    "three": "^0.161.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",

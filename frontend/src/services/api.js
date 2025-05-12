@@ -140,6 +140,14 @@ export const adminApi = {
   updateUser: (userId, userData) => axios.put(`/admin/users/${userId}`, userData),
   deleteUser: (userId) => axios.delete(`/admin/users/${userId}`),
   updateUserRole: (userId, role) => axios.put(`/admin/users/${userId}/role?role=${role}`),
+  
+  // Fixed getSystemStats method - use axios instead of axiosInstance
+  getSystemStats: () => axios.get('/api/admin/system-stats'),
+  
+  // Additional admin methods you might need
+  getUserAnalytics: () => axios.get('/api/admin/user-analytics'),
+  getCourseAnalytics: () => axios.get('/api/admin/course-analytics'),
+  getEnrollmentAnalytics: () => axios.get('/api/admin/enrollment-analytics'),
 }
 
 // Ensure Authorization header is set for all requests if token exists

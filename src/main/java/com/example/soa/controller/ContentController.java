@@ -4,10 +4,13 @@ import com.example.soa.Dto.ContentDTO;
 import com.example.soa.Model.Content;
 import com.example.soa.Model.Course;
 import com.example.soa.Model.Module;
+import com.example.soa.Model.User;
 import com.example.soa.exception.ContentNotFoundException;
 import com.example.soa.exception.AccessDeniedException;
 import com.example.soa.Service.ContentService;
 import com.example.soa.Service.ContentAccessService;
+import com.example.soa.Service.CourseService;
+import com.example.soa.security.UserPrincipal;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +18,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import org.slf4j.Logger;
@@ -36,66 +41,85 @@ public class ContentController {
     
     @Autowired
     private ContentAccessService contentAccessService;
+    
+    @Autowired
+    private CourseService courseService;
 
     @Operation(summary = "Upload new content")
     @CrossOrigin(origins = "http://localhost:3000")
     @PostMapping(value = "/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<ContentDTO> uploadContent(@ModelAttribute ContentDTO contentDTO) {
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ContentDTO> uploadContent(
+            @ModelAttribute ContentDTO contentDTO,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
         try {
             logger.info("Uploading new content for course ID: {}", contentDTO.getCourseId());
-            // Validate courseId
+            
+            // Validate that user can upload content for this course
+            Course course = courseService.getCourseById(contentDTO.getCourseId());
+            if (!currentUser.getRole().name().equals("ADMIN") && 
+                !course.getInstructor().getUserId().equals(currentUser.getId())) {
+                logger.warn("User {} attempting to upload content for course they don't own", currentUser.getId());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            // Validate input
             if (contentDTO.getCourseId() == null) {
                 logger.warn("Course ID is required");
                 return ResponseEntity.badRequest().body(contentDTO);
             }
-            // Validate title
+            
             if (contentDTO.getTitle() == null || contentDTO.getTitle().trim().isEmpty()) {
                 logger.warn("Title is required");
                 return ResponseEntity.badRequest().body(contentDTO);
             }
-            // Validate content type
+            
             if (contentDTO.getType() == null || contentDTO.getType().trim().isEmpty()) {
                 logger.warn("Content type is required");
                 return ResponseEntity.badRequest().body(contentDTO);
             }
-            // Validate URL or file
-            if ((contentDTO.getUrlFileLocation() == null || contentDTO.getUrlFileLocation().trim().isEmpty()) && contentDTO.getFile() == null) {
+            
+            if ((contentDTO.getUrlFileLocation() == null || contentDTO.getUrlFileLocation().trim().isEmpty()) 
+                && contentDTO.getFile() == null) {
                 logger.warn("URL file location is required unless a file is uploaded");
                 return ResponseEntity.badRequest().body(contentDTO);
             }
-            Course course = new Course(contentDTO.getCourseId());
+            
             Content content = new Content();
+            content.setCourse(course);
+            
             if (contentDTO.getContent() != null) {
                 content.setContent(contentDTO.getContent());
             } else {
-                // Provide a default value 
                 content.setContent("");
             }
-            content.setCourse(course);
+            
             try {
                 content.setType(Content.ContentType.valueOf(contentDTO.getType().toUpperCase()));
             } catch (IllegalArgumentException e) {
                 logger.warn("Invalid content type: {}", contentDTO.getType());
                 return ResponseEntity.badRequest().body(contentDTO);
             }
+            
             // Handle file upload
             if (contentDTO.getFile() != null && !contentDTO.getFile().isEmpty()) {
                 try {
                     String uploadDir = System.getProperty("user.dir") + "/uploads/";
-java.io.File dir = new java.io.File(uploadDir);
-if (!dir.exists()) {
-    boolean created = dir.mkdirs();
-    if (!created) {
-        logger.error("Failed to create directory: {}", uploadDir);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(contentDTO);
-    }
-    logger.info("Created directory: {}", uploadDir);
-}
-String originalFilename = contentDTO.getFile().getOriginalFilename();
-String filePath = uploadDir + System.currentTimeMillis() + "_" + originalFilename;
-logger.info("Saving file to: {}", filePath);
+                    java.io.File dir = new java.io.File(uploadDir);
+                    if (!dir.exists()) {
+                        boolean created = dir.mkdirs();
+                        if (!created) {
+                            logger.error("Failed to create directory: {}", uploadDir);
+                            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(contentDTO);
+                        }
+                        logger.info("Created directory: {}", uploadDir);
+                    }
+                    String originalFilename = contentDTO.getFile().getOriginalFilename();
+                    String filePath = uploadDir + System.currentTimeMillis() + "_" + originalFilename;
+                    logger.info("Saving file to: {}", filePath);
                     java.io.File dest = new java.io.File(filePath);
                     contentDTO.getFile().transferTo(dest);
+                    
                     content.setFileUrl(filePath);
                     content.setFileName(originalFilename);
                     content.setFileSize(dest.length());
@@ -107,66 +131,62 @@ logger.info("Saving file to: {}", filePath);
                     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(contentDTO);
                 }
             } else {
-                try {
-                    content.setUrlFileLocation(contentDTO.getUrlFileLocation());
-                } catch (IllegalArgumentException e) {
-                    logger.warn("Invalid URL format: {}", contentDTO.getUrlFileLocation());
-                    return ResponseEntity.badRequest().body(contentDTO);
-                }
+                // Handle URL-based content
+                content.setUrlFileLocation(contentDTO.getUrlFileLocation());
+                
                 if (contentDTO.getFileSize() != null && contentDTO.getFileSize() > 0) {
                     content.setFileSize(contentDTO.getFileSize());
                 } else {
                     logger.warn("Invalid file size provided");
                     return ResponseEntity.badRequest().body(contentDTO);
                 }
+                
                 if (contentDTO.getFileType() != null && !contentDTO.getFileType().trim().isEmpty()) {
                     content.setFileType(contentDTO.getFileType());
                 } else {
                     logger.warn("File type is required");
                     return ResponseEntity.badRequest().body(contentDTO);
                 }
+                
                 if (contentDTO.getFileName() != null && !contentDTO.getFileName().trim().isEmpty()) {
                     content.setFileName(contentDTO.getFileName());
                 }
+                
                 if (contentDTO.getFileUrl() != null && !contentDTO.getFileUrl().trim().isEmpty()) {
                     content.setFileUrl(contentDTO.getFileUrl());
                 }
             }
-            try {
-                content.setTitle(contentDTO.getTitle());
-            } catch (IllegalArgumentException e) {
-                logger.warn("Invalid title: {}", contentDTO.getTitle());
-                return ResponseEntity.badRequest().body(contentDTO);
-            }
+            
+            // Set remaining properties
+            content.setTitle(contentDTO.getTitle());
+            
             if (contentDTO.getDescription() != null) {
                 content.setDescription(contentDTO.getDescription());
             }
+            
             if (contentDTO.getModuleId() != null) {
                 Module module = new Module();
                 module.setModuleId(contentDTO.getModuleId());
                 content.setModule(module);
             }
-            // Set upload date to current time
+            
             content.setUploadDate(java.time.LocalDateTime.now());
-            // Set default values for new fields if not provided
-            if (contentDTO.getIsActive() != null) {
-                content.setIsActive(contentDTO.getIsActive());
-            } else {
-                content.setIsActive(true);
-            }
-            if (contentDTO.getOrderIndex() != null) {
-                content.setOrderIndex(contentDTO.getOrderIndex());
-            } else {
-                content.setOrderIndex(0);
-            }
+            content.setIsActive(contentDTO.getIsActive() != null ? contentDTO.getIsActive() : true);
+            content.setOrderIndex(contentDTO.getOrderIndex() != null ? contentDTO.getOrderIndex() : 0);
+            
             Content savedContent = contentService.uploadContent(content);
+            
+            // Map back to DTO
             contentDTO.setContentId(savedContent.getContentId());
             contentDTO.setUploadDate(savedContent.getUploadDate());
             contentDTO.setFileName(savedContent.getFileName());
             contentDTO.setFileUrl(savedContent.getFileUrl());
             contentDTO.setIsActive(savedContent.getIsActive());
             contentDTO.setOrderIndex(savedContent.getOrderIndex());
-            contentDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class).getContent(savedContent.getContentId())).withSelfRel());
+            
+            contentDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class)
+                .getContent(savedContent.getContentId())).withSelfRel());
+            
             logger.info("Content uploaded successfully with ID: {}", savedContent.getContentId());
             return ResponseEntity.ok(contentDTO);
         } catch (Exception e) {
@@ -174,7 +194,124 @@ logger.info("Saving file to: {}", filePath);
             return ResponseEntity.internalServerError().build();
         }
     }
-    
+
+    @Operation(summary = "Upload new content using JSON")
+    @PostMapping(value = "/upload-json", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<ContentDTO> uploadContentJson(
+            @RequestBody ContentDTO contentDTO,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        try {
+            logger.info("Uploading new content via JSON for course ID: {}", contentDTO.getCourseId());
+            
+            // Validate that user can upload content for this course
+            Course course = courseService.getCourseById(contentDTO.getCourseId());
+            if (!currentUser.getRole().name().equals("ADMIN") && 
+                !course.getInstructor().getUserId().equals(currentUser.getId())) {
+                logger.warn("User {} attempting to upload content for course they don't own", currentUser.getId());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            // Validation logic (same as upload method)
+            if (contentDTO.getCourseId() == null) {
+                logger.warn("Course ID is required");
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            if (contentDTO.getTitle() == null || contentDTO.getTitle().trim().isEmpty()) {
+                logger.warn("Title is required");
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            if (contentDTO.getType() == null || contentDTO.getType().trim().isEmpty()) {
+                logger.warn("Content type is required");
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            if (contentDTO.getUrlFileLocation() == null || contentDTO.getUrlFileLocation().trim().isEmpty()) {
+                logger.warn("URL file location is required");
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            Content content = new Content();
+            content.setCourse(course);
+            
+            try {
+                content.setType(Content.ContentType.valueOf(contentDTO.getType().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                logger.warn("Invalid content type: {}", contentDTO.getType());
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            // Set URL location
+            content.setUrlFileLocation(contentDTO.getUrlFileLocation());
+            
+            // Set required fields
+            if (contentDTO.getFileSize() != null && contentDTO.getFileSize() > 0) {
+                content.setFileSize(contentDTO.getFileSize());
+            } else {
+                logger.warn("Invalid file size provided");
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            if (contentDTO.getFileType() != null && !contentDTO.getFileType().trim().isEmpty()) {
+                content.setFileType(contentDTO.getFileType());
+            } else {
+                logger.warn("File type is required");
+                return ResponseEntity.badRequest().body(contentDTO);
+            }
+            
+            if (contentDTO.getFileName() != null && !contentDTO.getFileName().trim().isEmpty()) {
+                content.setFileName(contentDTO.getFileName());
+            }
+            
+            if (contentDTO.getFileUrl() != null && !contentDTO.getFileUrl().trim().isEmpty()) {
+                content.setFileUrl(contentDTO.getFileUrl());
+            }
+            
+            // Set title and description
+            content.setTitle(contentDTO.getTitle());
+            
+            if (contentDTO.getDescription() != null) {
+                content.setDescription(contentDTO.getDescription());
+            }
+            
+            // Set content
+            content.setContent(contentDTO.getContent() != null ? contentDTO.getContent() : "");
+            
+            // Set module if provided
+            if (contentDTO.getModuleId() != null) {
+                Module module = new Module();
+                module.setModuleId(contentDTO.getModuleId());
+                content.setModule(module);
+            }
+            
+            // Set metadata
+            content.setUploadDate(java.time.LocalDateTime.now());
+            content.setIsActive(contentDTO.getIsActive() != null ? contentDTO.getIsActive() : true);
+            content.setOrderIndex(contentDTO.getOrderIndex() != null ? contentDTO.getOrderIndex() : 0);
+            
+            Content savedContent = contentService.uploadContent(content);
+            
+            // Map back to DTO
+            contentDTO.setContentId(savedContent.getContentId());
+            contentDTO.setUploadDate(savedContent.getUploadDate());
+            contentDTO.setFileName(savedContent.getFileName());
+            contentDTO.setFileUrl(savedContent.getFileUrl());
+            contentDTO.setIsActive(savedContent.getIsActive());
+            contentDTO.setOrderIndex(savedContent.getOrderIndex());
+            
+            contentDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class)
+                .getContent(savedContent.getContentId())).withSelfRel());
+            
+            logger.info("Content uploaded successfully with ID: {}", savedContent.getContentId());
+            return ResponseEntity.ok(contentDTO);
+            
+        } catch (Exception e) {
+            logger.error("Error uploading content: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
 
     @Operation(summary = "Get content for a specific course")
     @GetMapping("/course/{courseId}")
@@ -203,7 +340,8 @@ logger.info("Saving file to: {}", filePath);
                 dto.setFileUrl(content.getFileUrl());
                 dto.setIsActive(content.getIsActive());
                 dto.setOrderIndex(content.getOrderIndex());
-                dto.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class).getContent(content.getContentId())).withSelfRel());
+                dto.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class)
+                    .getContent(content.getContentId())).withSelfRel());
                 return dto;
             }).collect(Collectors.toList());
             
@@ -215,142 +353,7 @@ logger.info("Saving file to: {}", filePath);
                     .body(Map.of("message", "Failed to fetch course content: " + e.getMessage()));
         }
     }
-// Add this method to your ContentController class
-@Operation(summary = "Upload new content using JSON")
-@PostMapping(value = "/upload-json", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
-public ResponseEntity<ContentDTO> uploadContentJson(@RequestBody ContentDTO contentDTO) {
-    try {
-        logger.info("Uploading new content via JSON for course ID: {}", contentDTO.getCourseId());
-        
-        // Validate courseId
-        if (contentDTO.getCourseId() == null) {
-            logger.warn("Course ID is required");
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        // Validate title
-        if (contentDTO.getTitle() == null || contentDTO.getTitle().trim().isEmpty()) {
-            logger.warn("Title is required");
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        // Validate content type
-        if (contentDTO.getType() == null || contentDTO.getType().trim().isEmpty()) {
-            logger.warn("Content type is required");
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        // Validate URL
-        if (contentDTO.getUrlFileLocation() == null || contentDTO.getUrlFileLocation().trim().isEmpty()) {
-            logger.warn("URL file location is required");
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        Course course = new Course(contentDTO.getCourseId());
-        Content content = new Content();
-        content.setCourse(course);
-        
-        try {
-            content.setType(Content.ContentType.valueOf(contentDTO.getType().toUpperCase()));
-        } catch (IllegalArgumentException e) {
-            logger.warn("Invalid content type: {}", contentDTO.getType());
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        // Set URL location
-        try {
-            content.setUrlFileLocation(contentDTO.getUrlFileLocation());
-        } catch (IllegalArgumentException e) {
-            logger.warn("Invalid URL format: {}", contentDTO.getUrlFileLocation());
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        // Set required fields
-        if (contentDTO.getFileSize() != null && contentDTO.getFileSize() > 0) {
-            content.setFileSize(contentDTO.getFileSize());
-        } else {
-            logger.warn("Invalid file size provided");
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        if (contentDTO.getFileType() != null && !contentDTO.getFileType().trim().isEmpty()) {
-            content.setFileType(contentDTO.getFileType());
-        } else {
-            logger.warn("File type is required");
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        if (contentDTO.getFileName() != null && !contentDTO.getFileName().trim().isEmpty()) {
-            content.setFileName(contentDTO.getFileName());
-        }
-        
-        if (contentDTO.getFileUrl() != null && !contentDTO.getFileUrl().trim().isEmpty()) {
-            content.setFileUrl(contentDTO.getFileUrl());
-        }
-        
-        // Set title and description
-        try {
-            content.setTitle(contentDTO.getTitle());
-        } catch (IllegalArgumentException e) {
-            logger.warn("Invalid title: {}", contentDTO.getTitle());
-            return ResponseEntity.badRequest().body(contentDTO);
-        }
-        
-        if (contentDTO.getDescription() != null) {
-            content.setDescription(contentDTO.getDescription());
-        }
-        
-        // Set the content field - THIS IS THE FIX FOR THE DATABASE ERROR
-        if (contentDTO.getContent() != null) {
-            content.setContent(contentDTO.getContent());
-        } else {
-            // Provide a default value 
-            content.setContent("");
-        }
-        
-        // Set module if provided
-        if (contentDTO.getModuleId() != null) {
-            Module module = new Module();
-            module.setModuleId(contentDTO.getModuleId());
-            content.setModule(module);
-        }
-        
-        // Set upload date to current time
-        content.setUploadDate(java.time.LocalDateTime.now());
-        
-        // Set default values for new fields if not provided
-        if (contentDTO.getIsActive() != null) {
-            content.setIsActive(contentDTO.getIsActive());
-        } else {
-            content.setIsActive(true);
-        }
-        
-        if (contentDTO.getOrderIndex() != null) {
-            content.setOrderIndex(contentDTO.getOrderIndex());
-        } else {
-            content.setOrderIndex(0);
-        }
-        
-        Content savedContent = contentService.uploadContent(content);
-        
-        contentDTO.setContentId(savedContent.getContentId());
-        contentDTO.setUploadDate(savedContent.getUploadDate());
-        contentDTO.setFileName(savedContent.getFileName());
-        contentDTO.setFileUrl(savedContent.getFileUrl());
-        contentDTO.setIsActive(savedContent.getIsActive());
-        contentDTO.setOrderIndex(savedContent.getOrderIndex());
-        
-        contentDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class)
-            .getContent(savedContent.getContentId())).withSelfRel());
-        
-        logger.info("Content uploaded successfully with ID: {}", savedContent.getContentId());
-        return ResponseEntity.ok(contentDTO);
-        
-    } catch (Exception e) {
-        logger.error("Error uploading content: {}", e.getMessage(), e);
-        return ResponseEntity.internalServerError().build();
-    }
-}
+
     @Operation(summary = "Get content by ID")
     @GetMapping("/{contentId}")
     public ResponseEntity<?> getContent(@PathVariable Long contentId) {
@@ -375,7 +378,8 @@ public ResponseEntity<ContentDTO> uploadContentJson(@RequestBody ContentDTO cont
             contentDTO.setFileUrl(content.getFileUrl());
             contentDTO.setIsActive(content.getIsActive());
             contentDTO.setOrderIndex(content.getOrderIndex());
-            contentDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class).getContent(contentId)).withSelfRel());
+            contentDTO.add(WebMvcLinkBuilder.linkTo(WebMvcLinkBuilder.methodOn(ContentController.class)
+                .getContent(contentId)).withSelfRel());
             contentDTO.setModuleId(content.getModule() != null ? content.getModule().getModuleId() : null);
             
             logger.info("Fetched content with ID: {}", contentId);
@@ -394,7 +398,76 @@ public ResponseEntity<ContentDTO> uploadContentJson(@RequestBody ContentDTO cont
                     .body(Map.of("message", "Failed to fetch content: " + e.getMessage()));
         }
     }
+    
+    @Operation(summary = "Update content")
+    @PutMapping("/{contentId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<?> updateContent(
+            @PathVariable Long contentId,
+            @RequestBody ContentDTO contentDTO,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        try {
+            logger.info("Updating content with ID: {}", contentId);
+            
+            Content existingContent = contentService.getContentById(contentId);
+            Course course = existingContent.getCourse();
+            
+            // Verify user has permission to update this content
+            if (!currentUser.getRole().name().equals("ADMIN") && 
+                !course.getInstructor().getUserId().equals(currentUser.getId())) {
+                logger.warn("User {} attempting to update content for course they don't own", currentUser.getId());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            // Update content fields
+            existingContent.setTitle(contentDTO.getTitle());
+            existingContent.setDescription(contentDTO.getDescription());
+            existingContent.setContent(contentDTO.getContent() != null ? contentDTO.getContent() : "");
+            existingContent.setIsActive(contentDTO.getIsActive());
+            existingContent.setOrderIndex(contentDTO.getOrderIndex());
+            
+            Content updatedContent = contentService.updateContent(existingContent);
+            
+            // Map to DTO
+            contentDTO.setContentId(updatedContent.getContentId());
+            contentDTO.setUploadDate(updatedContent.getUploadDate());
+            contentDTO.setCourseId(updatedContent.getCourse().getCourseId());
+            
+            return ResponseEntity.ok(contentDTO);
+        } catch (Exception e) {
+            logger.error("Error updating content: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Failed to update content: " + e.getMessage()));
+        }
+    }
+    
+    @Operation(summary = "Delete content")
+    @DeleteMapping("/{contentId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSTRUCTOR')")
+    public ResponseEntity<?> deleteContent(
+            @PathVariable Long contentId,
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        try {
+            logger.info("Deleting content with ID: {}", contentId);
+            
+            Content content = contentService.getContentById(contentId);
+            Course course = content.getCourse();
+            
+            // Verify user has permission to delete this content
+            if (!currentUser.getRole().name().equals("ADMIN") && 
+                !course.getInstructor().getUserId().equals(currentUser.getId())) {
+                logger.warn("User {} attempting to delete content for course they don't own", currentUser.getId());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
+            
+            contentService.deleteContent(contentId);
+            
+            logger.info("Content deleted successfully with ID: {}", contentId);
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            logger.error("Error deleting content: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Failed to delete content: " + e.getMessage()));
+        }
+    }
 }
-
-
-

@@ -1,15 +1,7 @@
 package com.example.soa.Model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.JoinColumn;
-import java.time.LocalDate;
-
+import java.time.LocalDateTime;
 import jakarta.persistence.*;
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -28,8 +20,19 @@ public class Submission {
     @JoinColumn(name = "assessment_id")
     private Assessment assessment;
 
-    private LocalDate submissionDate;
+    private LocalDateTime submissionDate;
+    
     private Float score;
+    
+    private Long gradedBy;
+    
+    private LocalDateTime gradedDate;
+    
+    @Column(columnDefinition = "TEXT")
+    private String feedback;
+    
+    @Column(columnDefinition = "TEXT")
+    private String content;
 
     @ElementCollection
     @CollectionTable(name = "student_answers", joinColumns = @JoinColumn(name = "submission_id"))
@@ -37,14 +40,12 @@ public class Submission {
     @Column(name = "answer")
     private Map<String, String> studentAnswers = new HashMap<>();
 
-    private String content;
-
     // Default constructor
     public Submission() {
     }
 
     // Parameterized constructor
-    public Submission(User student, Assessment assessment, LocalDate submissionDate, Float score) {
+    public Submission(User student, Assessment assessment, LocalDateTime submissionDate, Float score) {
         this.student = student;
         this.assessment = assessment;
         this.submissionDate = submissionDate;
@@ -52,7 +53,7 @@ public class Submission {
     }
 
     public void submitAssessment() {
-        this.submissionDate = LocalDate.now();
+        this.submissionDate = LocalDateTime.now();
         System.out.println("Assessment submitted by student: " + this.student.getName() +
                 ", Submission Date: " + this.submissionDate);
     }
@@ -65,6 +66,7 @@ public class Submission {
         studentAnswers.put(question, answer);
     }
 
+    // Getters and Setters
     public Long getSubmissionId() {
         return submissionId;
     }
@@ -89,11 +91,11 @@ public class Submission {
         this.assessment = assessment;
     }
 
-    public LocalDate getSubmissionDate() {
+    public LocalDateTime getSubmissionDate() {
         return submissionDate;
     }
 
-    public void setSubmissionDate(LocalDate submissionDate) {
+    public void setSubmissionDate(LocalDateTime submissionDate) {
         this.submissionDate = submissionDate;
     }
 
@@ -105,12 +107,41 @@ public class Submission {
         this.score = score;
     }
 
+    public Long getGradedBy() {
+        return gradedBy;
+    }
+
+    public void setGradedBy(Long gradedBy) {
+        this.gradedBy = gradedBy;
+    }
+
+    public LocalDateTime getGradedDate() {
+        return gradedDate;
+    }
+
+    public void setGradedDate(LocalDateTime gradedDate) {
+        this.gradedDate = gradedDate;
+    }
+
+    public String getFeedback() {
+        return feedback;
+    }
+
+    public void setFeedback(String feedback) {
+        this.feedback = feedback;
+    }
+
     public Map<String, String> getStudentAnswers() {
         return studentAnswers;
     }
 
     public void setStudentAnswers(Map<String, String> studentAnswers) {
         this.studentAnswers = studentAnswers;
+    }
+
+    // Helper method to set submitted answers (alias for setStudentAnswers)
+    public void setSubmittedAnswers(Map<String, String> submittedAnswers) {
+        this.studentAnswers = submittedAnswers;
     }
 
     public String getContent() {
@@ -121,6 +152,19 @@ public class Submission {
         this.content = content;
     }
 
+    // Utility method to set student by ID
+    public void setStudentId(Long studentId) {
+        if (this.student == null) {
+            this.student = new User();
+        }
+        this.student.setUserId(studentId);
+    }
+
+    // Utility method to set score as Integer
+    public void setScore(Integer score) {
+        this.score = score != null ? score.floatValue() : null;
+    }
+
     @Override
     public String toString() {
         return "Submission{" +
@@ -129,6 +173,9 @@ public class Submission {
                 ", assessment=" + assessment +
                 ", submissionDate=" + submissionDate +
                 ", score=" + score +
+                ", gradedBy=" + gradedBy +
+                ", gradedDate=" + gradedDate +
+                ", feedback='" + feedback + '\'' +
                 ", content='" + content + '\'' +
                 '}';
     }

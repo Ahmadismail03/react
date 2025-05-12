@@ -1,10 +1,11 @@
-// src/main/java/com/example/soa/config/SecurityConfig.java
 package com.example.soa.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -32,7 +33,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity
+@EnableMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
 public class SecurityConfig {
     private static final Logger logger = LoggerFactory.getLogger(SecurityConfig.class);
 
@@ -76,6 +77,15 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
+    // Add role hierarchy - ADMIN > INSTRUCTOR > STUDENT
+    @Bean
+    public RoleHierarchy roleHierarchy() {
+        RoleHierarchyImpl roleHierarchy = new RoleHierarchyImpl();
+        String hierarchy = "ROLE_ADMIN > ROLE_INSTRUCTOR > ROLE_STUDENT";
+        roleHierarchy.setHierarchy(hierarchy);
+        return roleHierarchy;
+    }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfig = new CorsConfiguration();
@@ -115,25 +125,59 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint(unauthorizedHandler)
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"error\":\"Access Denied\", \"message\":\"You do not have permission to access this resource\"}");
+                })
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authorizeHttpRequests(auth -> auth
+                // Public endpoints
                 .requestMatchers("/", "/index.html", "/static/**", "/login", "/oauth2/**").permitAll()
-                // Swagger UI access
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/api-docs/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/public/**", "/actuator/**").permitAll()
-                .requestMatchers("/api/courses/**").permitAll()
-                .requestMatchers("/api/enrollments/**").permitAll()
-                .requestMatchers("/api/content/**", "/content/**", "/api/contents/**", "/contents/**").authenticated()
-                .requestMatchers("/api/assessment/**").permitAll()
+                
+                // Course endpoints - restricted access
+                .requestMatchers("/api/courses").hasAnyRole(Role.ADMIN, Role.INSTRUCTOR)  // Create course
+                .requestMatchers("/api/courses/*/assignInstructor").hasRole(Role.ADMIN)  // Assign instructor
+                .requestMatchers("/api/courses/*").authenticated()  // View specific course
+                .requestMatchers("/api/courses").authenticated()  // List courses
+                
+                // Content endpoints - restricted access
+                .requestMatchers("/api/content/upload", "/api/content/upload-json").hasAnyRole(Role.ADMIN, Role.INSTRUCTOR)
+                .requestMatchers("/api/content/**").authenticated()
+                
+                // Assessment endpoints - restricted access
+                .requestMatchers("/api/assessment/create").hasAnyRole(Role.ADMIN, Role.INSTRUCTOR)
+                .requestMatchers("/api/assessment/**").authenticated()
+                
+                // Enrollment endpoints
+                .requestMatchers("/api/enrollments/course/*/student/*").hasAnyRole(Role.ADMIN, Role.INSTRUCTOR)
+                .requestMatchers("/api/enrollments/**").authenticated()
+                
+                // Module endpoints - restricted access
+                .requestMatchers("/api/module/create").hasAnyRole(Role.ADMIN, Role.INSTRUCTOR)
+                .requestMatchers("/api/module/**").authenticated()
+                
+                // Admin endpoints
                 .requestMatchers("/api/admin/**").hasRole(Role.ADMIN)
-                .requestMatchers("/api/instructor/**").hasRole(Role.INSTRUCTOR)
-                .requestMatchers("/api/student/**").hasRole(Role.STUDENT)
+                
+                // Instructor endpoints
+                .requestMatchers("/api/instructor/**").hasAnyRole(Role.ADMIN, Role.INSTRUCTOR)
+                
+                // Student endpoints
+                .requestMatchers("/api/student/**").authenticated()
+                
+                // Profile and notifications
                 .requestMatchers("/api/profile/**").authenticated()
                 .requestMatchers("/api/notifications/**").authenticated()
+                .requestMatchers("/api/users/**").authenticated()
+                
+                // Any other request must be authenticated
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
