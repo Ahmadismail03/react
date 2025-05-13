@@ -383,63 +383,7 @@ const fetchDashboardData = async () => {
         </Grid>
       </Paper>
       
-      {/* Quick Actions */}
-      <Paper sx={{ p: 3, mb: 4 }}>
-        <Typography variant="h6" gutterBottom>
-          Quick Actions
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid item xs={6} sm={3}>
-            <Button 
-              variant="outlined" 
-              color="primary" 
-              fullWidth
-              startIcon={<PersonAddIcon />}
-              onClick={() => handleNavigate('/admin/users')}
-              sx={{ p: 2 }}
-            >
-              Add User
-            </Button>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Button 
-              variant="outlined" 
-              color="secondary" 
-              fullWidth
-              startIcon={<MenuBookIcon />}
-              onClick={() => handleNavigate('/admin/courses')}
-              sx={{ p: 2 }}
-            >
-              Manage Courses
-            </Button>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Button 
-              variant="outlined" 
-              color="info" 
-              fullWidth
-              startIcon={<MailIcon />}
-              onClick={() => handleNavigate('/admin/notifications')}
-              sx={{ p: 2 }}
-            >
-              Send Notification
-            </Button>
-          </Grid>
-          <Grid item xs={6} sm={3}>
-            <Button 
-              variant="outlined" 
-              color="warning" 
-              fullWidth
-              startIcon={<SettingsIcon />}
-              onClick={() => handleNavigate('/admin/settings')}
-              sx={{ p: 2 }}
-            >
-              System Settings
-            </Button>
-          </Grid>
-        </Grid>
-      </Paper>
-      
+     
       {/* Recent Activity */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>

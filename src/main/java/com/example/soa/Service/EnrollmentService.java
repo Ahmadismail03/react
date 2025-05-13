@@ -86,4 +86,18 @@ public class EnrollmentService {
         logger.info("Fetched {} enrollments for student with ID: {}", enrollments.size(), studentId);
         return enrollments;
     }
+
+    public List<Enrollment> getEnrollmentsByCourse(Long courseId) {
+        logger.info("Fetching enrollments for course with ID: {}", courseId);
+        
+        // Find the course
+        Course course = courseRepository.findById(courseId)
+            .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + courseId));
+            
+        // Find all enrollments for this course using the repository
+        List<Enrollment> enrollments = enrollmentRepository.findByCourse_CourseId(courseId);
+        
+        logger.info("Found {} enrollments for course with ID: {}", enrollments.size(), courseId);
+        return enrollments;
+    }
 }

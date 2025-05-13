@@ -194,49 +194,53 @@ public class NotificationController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<?> createNotificationWithBody(
-            @RequestBody NotificationRequest request,
-            @AuthenticationPrincipal UserPrincipal currentUser) {
-        try {
-            // Only allow admins to create notifications for other users
-            if (!currentUser.getRole().equals(User.Role.ADMIN) && 
-                !currentUser.getEmail().equals(request.getRecipientEmail())) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("You can only create notifications for yourself");
-            }
-
-            logger.info("Creating notification for user: {}", request.getRecipientEmail());
-            
-            // Get the recipient user
-            User recipient = userService.findByEmail(request.getRecipientEmail())
-                .orElseThrow(() -> new RuntimeException("Recipient user not found"));
-
-            // Create the notification
-            Notification notification = new Notification();
-            notification.setTitle(request.getTitle());
-            notification.setMessage(request.getMessage());
-            notification.setRecipientEmail(request.getRecipientEmail());
-            notification.setType(request.getType());
-            notification.setRead(false);
-            notification.setStatus(NotificationStatus.valueOf(NotificationStatus.PENDING.name()));
-            notification.setUser(recipient);
-            
-            if (request.getTemplateName() != null) {
-                notification.setTemplateName(request.getTemplateName());
-            }
-            if (request.getTemplateData() != null) {
-                notification.setTemplateData(request.getTemplateData());
-            }
-
-            notification = notificationRepository.save(notification);
-            return ResponseEntity.ok(notification);
-        } catch (Exception e) {
-            logger.error("Error creating notification: ", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Failed to create notification: " + e.getMessage());
+public ResponseEntity<?> createNotificationWithBody(
+        @RequestBody NotificationRequest request,
+        @AuthenticationPrincipal UserPrincipal currentUser) {
+    try {
+        // If recipientEmail is null or empty, use the current user's email
+        if (request.getRecipientEmail() == null || request.getRecipientEmail().isEmpty()) {
+            request.setRecipientEmail(currentUser.getEmail());
         }
+        
+        // Only allow admins to create notifications for other users
+        if (!currentUser.getRole().equals(User.Role.ADMIN) && 
+            !currentUser.getEmail().equals(request.getRecipientEmail())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body("You can only create notifications for yourself");
+        }
+
+        logger.info("Creating notification for user: {}", request.getRecipientEmail());
+        
+        // Get the recipient user
+        User recipient = userService.findByEmail(request.getRecipientEmail())
+            .orElseThrow(() -> new RuntimeException("Recipient user not found"));
+
+        // Create the notification
+        Notification notification = new Notification();
+        notification.setTitle(request.getTitle());
+        notification.setMessage(request.getMessage());
+        notification.setRecipientEmail(request.getRecipientEmail());
+        notification.setType(request.getType());
+        notification.setRead(false);
+        notification.setStatus(NotificationStatus.valueOf(NotificationStatus.PENDING.name()));
+        notification.setUser(recipient);
+        
+        if (request.getTemplateName() != null) {
+            notification.setTemplateName(request.getTemplateName());
+        }
+        if (request.getTemplateData() != null) {
+            notification.setTemplateData(request.getTemplateData());
+        }
+
+        notification = notificationRepository.save(notification);
+        return ResponseEntity.ok(notification);
+    } catch (Exception e) {
+        logger.error("Error creating notification: ", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .body("Failed to create notification: " + e.getMessage());
     }
-}
+}}
 
 class NotificationRequest {
     private String title;

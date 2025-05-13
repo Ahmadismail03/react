@@ -1,3 +1,4 @@
+// src/components/common/ProtectedRoute.jsx
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -9,7 +10,15 @@ import { useAuth } from '../../contexts/AuthContext'
  * @returns {React.ReactNode} - The protected component or redirect
  */
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
-  const { user, isAuthenticated, loading } = useAuth()
+  const { user, isAuthenticated, loading, isPasswordReset } = useAuth()
+
+  // Check if this is a password reset route
+  const isResetPasswordPage = window.location.pathname.includes('/reset-password');
+  
+  // Allow access to reset password page regardless of authentication
+  if (isResetPasswordPage || isPasswordReset) {
+    return children;
+  }
 
   // Show nothing while checking authentication
   if (loading) {

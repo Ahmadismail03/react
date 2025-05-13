@@ -1,4 +1,4 @@
-// src/App.jsx with updated routes
+// src/App.jsx
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { Box, Container, ThemeProvider, CssBaseline } from '@mui/material'
@@ -38,9 +38,10 @@ import GradeView from './pages/student/GradeView'
 
 // Common components
 import ProtectedRoute from './components/common/ProtectedRoute'
+import NotificationCenter from './pages/common/NotificationCenter'
 
 function AppRoutes() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isPasswordReset } = useAuth()
 
   return (
     <Routes>
@@ -48,8 +49,11 @@ function AppRoutes() {
       <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />} />
       <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" replace />} />
       <Route path="/forgot-password" element={!isAuthenticated ? <ForgotPassword /> : <Navigate to="/" replace />} />
-      <Route path="/reset-password" element={!isAuthenticated ? <ResetPassword /> : <Navigate to="/" replace />} />
-      <Route path="/reset-password/:token" element={!isAuthenticated ? <ResetPassword /> : <Navigate to="/" replace />} />
+      
+      {/* Reset Password routes - Allow access regardless of authentication state */}
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/reset-password/:token" element={<ResetPassword />} />
+      
       <Route path="/oauth/callback" element={<OAuthCallback />} />
       
       {/* Main dashboard - redirects based on role */}
@@ -181,16 +185,19 @@ function App() {
     const token = params.get('token');
     
     if (token) {
-      // Store the token in localStorage
-      localStorage.setItem('token', token);
-      
-      // Remove the token from the URL to prevent it from being shared or bookmarked
-      const url = new URL(window.location);
-      url.searchParams.delete('token');
-      window.history.replaceState({}, document.title, url.toString());
-      
-      // Reload the page to apply the token
-      window.location.href = '/';
+      // For reset password, don't store in localStorage
+      if (!window.location.pathname.includes('/reset-password')) {
+        // Store the token in localStorage
+        localStorage.setItem('token', token);
+        
+        // Remove the token from the URL to prevent it from being shared or bookmarked
+        const url = new URL(window.location);
+        url.searchParams.delete('token');
+        window.history.replaceState({}, document.title, url.toString());
+        
+        // Reload the page to apply the token
+        window.location.href = '/';
+      }
     }
   }, []);
 

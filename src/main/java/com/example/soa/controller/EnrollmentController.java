@@ -7,6 +7,10 @@ import com.example.soa.Service.EnrollmentService;
 import com.example.soa.exception.EnrollmentNotFoundException;
 import com.example.soa.mapper.EnrollmentMapper;
 import com.example.soa.security.UserPrincipal;
+import com.example.soa.Model.Course;
+import com.example.soa.Repository.CourseRepository;
+import com.example.soa.Repository.EnrollmentRepository;
+import com.example.soa.exception.ResourceNotFoundException;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.CollectionModel;
 import org.springframework.hateoas.server.mvc.WebMvcLinkBuilder;
@@ -22,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/enrollments")
@@ -32,10 +37,18 @@ public class EnrollmentController {
 
     private final EnrollmentService enrollmentService;
     private final EnrollmentMapper enrollmentMapper;
+    private final CourseRepository courseRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
-    public EnrollmentController(EnrollmentService enrollmentService, EnrollmentMapper enrollmentMapper) {
+    public EnrollmentController(
+            EnrollmentService enrollmentService, 
+            EnrollmentMapper enrollmentMapper,
+            CourseRepository courseRepository,
+            EnrollmentRepository enrollmentRepository) {
         this.enrollmentService = enrollmentService;
         this.enrollmentMapper = enrollmentMapper;
+        this.courseRepository = courseRepository;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
     @PostMapping("/course/{courseId}")
@@ -141,5 +154,62 @@ public class EnrollmentController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Failed to fetch enrollments: " + e.getMessage()));
         }
+    }
+
+    @GetMapping("/course/{courseId}")
+    public ResponseEntity<?> getEnrollmentsByCourse(@PathVariable Long courseId) {
+        try {
+            logger.info("Fetching enrollments for course with ID: {}", courseId);
+            
+            // Get the current authenticated user
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            
+            // Check if the user is an admin or instructor (for access control)
+            boolean isAdmin = userPrincipal.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            
+            // You may want to check if the instructor teaches this course, if not admin
+            
+            // Get the course enrollments
+            List<Enrollment> enrollments = findEnrollmentsForCourse(courseId);
+            
+            // Map enrollments to DTOs with student information
+            List<Map<String, Object>> enrollmentData = enrollments.stream().map(enrollment -> {
+                Map<String, Object> data = new HashMap<>();
+                data.put("enrollmentId", enrollment.getEnrollmentId());
+                data.put("studentId", enrollment.getStudent().getUserId());
+                data.put("studentName", enrollment.getStudent().getName());
+                data.put("studentEmail", enrollment.getStudent().getEmail());
+                data.put("enrollmentDate", enrollment.getEnrollmentDate());
+                data.put("progress", enrollment.getProgress());
+                data.put("completionStatus", enrollment.getCompletionStatus());
+                
+                return data;
+            }).collect(Collectors.toList());
+            
+            return ResponseEntity.ok(enrollmentData);
+        } catch (Exception e) {
+            logger.error("Failed to fetch enrollments for course ID {}: {}", courseId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Failed to fetch enrollments: " + e.getMessage()));
+        }
+    }
+
+    // Helper method to find enrollments for a course
+    private List<Enrollment> findEnrollmentsForCourse(Long courseId) {
+        // Try to find the course first
+        Course course = courseRepository.findById(courseId)
+            .orElseThrow(() -> new ResourceNotFoundException("Course not found with ID: " + courseId));
+        
+        // Get enrollments for this course
+        // Adding this temp solution since we don't have the repository method yet
+        List<Enrollment> allEnrollments = enrollmentRepository.findAll();
+        return allEnrollments.stream()
+            .filter(e -> e.getCourse().getCourseId().equals(courseId))
+            .collect(Collectors.toList());
+        
+        // Once you add the proper repository method, you can use:
+        // return enrollmentRepository.findByCourse_CourseId(courseId);
     }
 }

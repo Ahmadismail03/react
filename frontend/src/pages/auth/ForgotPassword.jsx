@@ -1,3 +1,4 @@
+// frontend/src/pages/auth/ForgotPassword.jsx
 import { useState } from 'react'
 import { useNavigate, Link as RouterLink } from 'react-router-dom'
 import {
@@ -15,7 +16,7 @@ import {
 import LockResetIcon from '@mui/icons-material/LockReset'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
-import { authApi } from '../../services/api'
+import { authApi } from '../../services/authApi'
 
 const ForgotPassword = () => {
   const [loading, setLoading] = useState(false)
@@ -35,6 +36,7 @@ const ForgotPassword = () => {
       setSuccess(true)
       toast.success('Password reset instructions sent to your email')
     } catch (err) {
+      console.error('Forgot password error:', err)
       toast.error(err.response?.data?.message || 'Failed to send reset instructions')
     } finally {
       setLoading(false)
@@ -70,6 +72,10 @@ const ForgotPassword = () => {
             </Alert>
             <Typography variant="body1" sx={{ mb: 3 }}>
               Please check your inbox and follow the instructions to reset your password.
+              The email will contain a link that will take you to the reset password page.
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              If you don't receive the email within a few minutes, please check your spam folder.
             </Typography>
             <Button
               fullWidth

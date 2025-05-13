@@ -1,3 +1,4 @@
+// frontend/src/pages/auth/ResetPassword.jsx
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams, useLocation, Link as RouterLink } from 'react-router-dom'
 import {
@@ -16,18 +17,20 @@ import {
 import LockResetIcon from '@mui/icons-material/LockReset'
 import { useForm } from 'react-hook-form'
 import { toast } from 'react-toastify'
-import { authApi } from '../../services/api'
+import { authApi } from '../../services/authApi'
 
 const ResetPassword = () => {
   const [loading, setLoading] = useState(false)
   const [validatingToken, setValidatingToken] = useState(true)
   const [tokenValid, setTokenValid] = useState(false)
   const [success, setSuccess] = useState(false)
+  const navigate = useNavigate()
+  
+  // Get token from URL parameters
   const { token: urlToken } = useParams()
   const location = useLocation()
   const queryToken = new URLSearchParams(location.search).get('token')
   const token = urlToken || queryToken
-  const navigate = useNavigate()
 
   const {
     register,
@@ -40,12 +43,16 @@ const ResetPassword = () => {
   useEffect(() => {
     const validateToken = async () => {
       try {
-        console.log('Validating token:', token) // Debug log
+        console.log('Validating token:', token)
+        if (!token) {
+          throw new Error('No token provided')
+        }
+        
         const response = await authApi.validateResetToken(token)
-        console.log('Token validation response:', response) // Debug log
-        setTokenValid(true)
+        console.log('Token validation response:', response)
+        setTokenValid(response.data.valid)
       } catch (err) {
-        console.error('Token validation error:', err) // Debug log
+        console.error('Token validation error:', err)
         toast.error('Invalid or expired reset token')
         setTokenValid(false)
       } finally {
@@ -54,22 +61,28 @@ const ResetPassword = () => {
     }
 
     if (token) {
-      console.log('Token found in URL:', token) // Debug log
+      console.log('Token found in URL:', token)
       validateToken()
     } else {
-      console.warn('No token found in URL parameters') // Debug log
+      console.warn('No token found in URL parameters')
       setValidatingToken(false)
       setTokenValid(false)
     }
   }, [token])
 
   const onSubmit = async (data) => {
+    if (!token) {
+      toast.error('Missing reset token')
+      return
+    }
+    
     try {
       setLoading(true)
       await authApi.resetPassword(token, data.password)
       setSuccess(true)
       toast.success('Password has been reset successfully')
     } catch (err) {
+      console.error('Reset password error:', err)
       toast.error(err.response?.data?.message || 'Failed to reset password')
     } finally {
       setLoading(false)

@@ -10,7 +10,8 @@ import java.util.List;
 
 @Repository
 public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
-    
+    List<Enrollment> findByCourse_CourseId(Long courseId);
+
     Optional<Enrollment> findByStudentAndCourse(User student, Course course);
     
     Optional<Enrollment> findByStudent_UserIdAndCourse_CourseId(Long studentId, Long courseId);

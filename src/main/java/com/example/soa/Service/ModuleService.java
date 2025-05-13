@@ -20,4 +20,14 @@ public class ModuleService {
     public Module getModuleById(Long moduleId) {
         return moduleRepository.findById(moduleId).orElse(null);
     }
+
+    public Module addContentToModule(Long moduleId, Long contentId, Long id) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'addContentToModule'");
+    }
+
+    public Module removeContentFromModule(Long moduleId, Long contentId, Long id) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'removeContentFromModule'");
+    }
 }

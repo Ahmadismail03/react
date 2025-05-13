@@ -32,32 +32,68 @@ export const userApi = {
   updateUserRole: (userId, role) => axios.put(`/api/users/${userId}/role?role=${role}`),
 }
 
-// Course API endpoints
+// Updated courseApi in api.js
 export const courseApi = {
   getAllCourses: () => axios.get('/api/courses'),
   getInstructorCourses: () => axios.get('/api/courses/instructor'),
   getCourseById: (id) => axios.get(`/api/courses/${id}`),
-  createCourse: (courseData) => axios.post('/api/courses', courseData),
+  
+  // Improved createCourse with proper data formatting
+  createCourse: (courseData) => {
+    // Ensure required fields are present
+    if (!courseData.title && !courseData.name) {
+      return Promise.reject(new Error('Course title/name is required'));
+    }
+    
+    // Make sure name is always set if title is provided
+    const formattedData = {
+      ...courseData,
+      name: courseData.name || courseData.title,
+    };
+    
+    // Handle dates if they're not already provided
+    if (!formattedData.startDate) {
+      formattedData.startDate = new Date().toISOString().split('T')[0];
+    }
+    
+    if (!formattedData.endDate) {
+      // Default to 3 months from start date
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 3);
+      formattedData.endDate = endDate.toISOString().split('T')[0];
+    }
+    
+    console.log('Formatted course data for API:', formattedData);
+    return axios.post('/api/courses', formattedData);
+  },
+  
   updateCourse: (id, courseData) => {
-    // Ensure id is not undefined before making the request
     if (!id) {
       console.error('Course ID is undefined');
       return Promise.reject(new Error('Course ID is required'));
     }
-    return axios.put(`/api/courses/${id}`, courseData);
+    
+    // Make sure name is always set if title is provided
+    const formattedData = {
+      ...courseData,
+      name: courseData.name || courseData.title,
+    };
+    
+    console.log('Updating course with ID:', id, 'Data:', formattedData);
+    return axios.put(`/api/courses/${id}`, formattedData);
   },
+  
   deleteCourse: (id) => {
-    // Validate the course ID before making the request
     if (!id) {
       return Promise.reject(new Error('Invalid course ID: ID is undefined or null'));
     }
     return axios.delete(`/api/courses/${id}`);
   },
+  
   enrollInCourse: (courseId) => axios.post(`/api/courses/${courseId}/enroll`),
   getCourseStudents: (courseId) => axios.get(`/api/courses/${courseId}/students`),
   assignInstructor: (courseId, instructorId) => axios.put(`/api/courses/${courseId}/assignInstructor?instructorId=${instructorId}`),
-}
-
+};
 // Module API endpoints
 export const moduleApi = {
   getModulesByCourse: (courseId) => axios.get(`/api/module/course/${courseId}`),
@@ -69,13 +105,69 @@ export const contentApi = {
   getContentByCourse: (courseId) => axios.get(`/api/content/course/${courseId}`),
   getContent: (contentId) => axios.get(`/api/content/${contentId}`),
   uploadContent: (contentData) => {
-    const formData = new FormData()
-    for (const [key, value] of Object.entries(contentData)) {
-      formData.append(key, value)
+    // Create a properly formatted FormData object
+    const formData = new FormData();
+    
+    // Add required fields
+    formData.append('title', contentData.title);
+    formData.append('courseId', contentData.courseId);
+    formData.append('type', contentData.type);
+    
+    // Add optional fields if they exist
+    if (contentData.description) {
+      formData.append('description', contentData.description);
     }
-    return axios.post(`/api/content/upload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    
+    if (contentData.moduleId) {
+      formData.append('moduleId', contentData.moduleId);
+    }
+    
+    // Handle file upload
+    if (contentData.file) {
+      formData.append('file', contentData.file);
+    } else if (contentData.urlFileLocation) {
+      formData.append('urlFileLocation', contentData.urlFileLocation);
+      
+      // When no file is uploaded but a URL is provided, we need these additional fields
+      if (contentData.fileSize) {
+        formData.append('fileSize', contentData.fileSize);
+      } else {
+        formData.append('fileSize', '1024'); // Default size for external URLs
+      }
+      
+      if (contentData.fileType) {
+        formData.append('fileType', contentData.fileType);
+      } else {
+        // Determine file type based on content type
+        let fileType = 'text/plain';
+        switch (contentData.type) {
+          case 'PDF':
+            fileType = 'application/pdf';
+            break;
+          case 'VIDEO':
+            fileType = 'video/mp4';
+            break;
+          case 'LINK':
+            fileType = 'text/html';
+            break;
+          case 'QUIZ':
+            fileType = 'application/json';
+            break;
+        }
+        formData.append('fileType', fileType);
+      }
+      
+      if (contentData.fileName) {
+        formData.append('fileName', contentData.fileName);
+      } else {
+        formData.append('fileName', contentData.title + getFileExtension(contentData.type));
+      }
+    }
+    
+    // Proper content type for multipart/form-data
+    return axios.post('/api/content/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
   },
   uploadJsonContent: (contentData) => axios.post('/api/content/upload-json', contentData, {
     headers: { 'Content-Type': 'application/json' },
@@ -97,12 +189,26 @@ export const assessmentApi = {
 
 // Enrollment API endpoints
 export const enrollmentApi = {
+  // Get all enrollments for the current user
   getMyEnrollments: () => axios.get('/api/enrollments/my'),
+  
+  // Get enrollments for a specific student
   getEnrollmentsByStudent: (studentId) => axios.get(`/api/enrollments/student/${studentId}`),
+  
+  // Get all enrollments for a specific course
+  getCourseEnrollments: (courseId) => axios.get(`/api/enrollments/course/${courseId}`),
+  
+  // Enroll a student in a course
   enrollStudent: (enrollmentData) => axios.post('/api/enrollments', enrollmentData),
+  
+  // Get enrollment progress
   getEnrollmentProgress: (enrollmentId) => axios.get(`/api/enrollments/${enrollmentId}/progress`),
-  updateProgress: (enrollmentId, progressData) =>
+  
+  // Update enrollment progress
+  updateProgress: (enrollmentId, progressData) => 
     axios.put(`/api/enrollments/${enrollmentId}/progress`, progressData),
+  
+  // Unenroll a student from a course
   unenrollStudent: (courseId, studentId) => 
     axios.delete(`/api/enrollments/course/${courseId}/student/${studentId}`),
 }
@@ -121,12 +227,46 @@ export const quizApi = {
 }
 
 // Notification API endpoints
+// Update in api.js - add a fallback method for notification creation
+// src/services/api.js (update the notificationApi object)
+
 export const notificationApi = {
   getAllNotifications: () => axios.get('/api/notifications'),
   getUnreadNotifications: () => axios.get('/api/notifications/unread'),
   getNotificationCount: () => axios.get('/api/notifications/count'),
   getNotificationsByStatus: (status) => axios.get(`/api/notifications/status/${status}`),
-  createNotification: (notificationData) => axios.post('/api/notifications/create', notificationData),
+  
+  // The key fix: Properly formatted notification creation method
+  createNotification: (notificationData) => {
+    // Always ensure recipient email is set correctly
+    const formattedData = {
+      title: notificationData.title,
+      message: notificationData.message,
+      type: notificationData.type || 'SYSTEM'
+    };
+    
+    // Only include recipientEmail if it's provided and not empty
+    if (notificationData.recipientEmail && notificationData.recipientEmail.trim() !== '') {
+      formattedData.recipientEmail = notificationData.recipientEmail;
+    } else {
+      // If no recipient is specified, use the current user's email
+      // This relies on the authentication context
+      const token = localStorage.getItem('token');
+      if (!token) {
+        return Promise.reject(new Error('Not authenticated'));
+      }
+      
+      // First get the current user's info if we don't have it
+      return axios.get('/api/auth/me')
+        .then(response => {
+          formattedData.recipientEmail = response.data.email;
+          return axios.post('/api/notifications/create', formattedData);
+        });
+    }
+    
+    return axios.post('/api/notifications/create', formattedData);
+  },
+  
   markAsRead: (notificationId) => axios.put(`/api/notifications/${notificationId}/read`),
   updateStatus: (notificationId, status) => axios.put(`/api/notifications/${notificationId}/status/${status}`),
   deleteNotification: (notificationId) => axios.delete(`/api/notifications/${notificationId}`),
@@ -155,3 +295,31 @@ const token = localStorage.getItem('token')
 if (token) {
   axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
 }
+
+function getFileExtension(contentType) {
+  switch (contentType) {
+    case 'PDF':
+      return '.pdf';
+    case 'VIDEO':
+      return '.mp4';
+    case 'LINK':
+      return '.url';
+    case 'QUIZ':
+      return '.json';
+    default:
+      return '.txt';
+  }
+}
+
+export default {
+  authApi,
+  userApi,
+  courseApi,
+  moduleApi,
+  contentApi,
+  assessmentApi,
+  enrollmentApi,
+  quizApi,
+  notificationApi,
+  adminApi,
+};

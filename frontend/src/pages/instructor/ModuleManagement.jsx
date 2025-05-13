@@ -1,248 +1,235 @@
+// src/pages/instructor/ModuleManagement.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   Paper,
   Button,
   TextField,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
   ListItemSecondaryAction,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  CircularProgress,
   Divider,
-  Alert,
   Card,
   CardContent,
-  Collapse,
   Tooltip,
-  Grid
+  Alert
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
+  Edit as EditIcon,
   DragIndicator as DragIcon,
+  Folder as FolderIcon,
   ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Folder as FolderIcon
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
+import { useParams } from 'react-router-dom';
+import { courseApi } from '../../services/api';
+// Import moduleApi directly from the file
+import moduleApi from '../../services/moduleApi';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../contexts/AuthContext';
-import { moduleApi, courseApi, contentApi } from '../../services/api';
+
+// Simple implementation of DragDropContext for now
+// If you're using react-beautiful-dnd, make sure to install and import it
+const DragDropContext = ({ children, onDragEnd }) => {
+  return <div>{children}</div>;
+};
+
+const Droppable = ({ children, droppableId }) => {
+  return <div data-droppable-id={droppableId}>{children({ innerRef: () => {}, placeholder: null })}</div>;
+};
+
+const Draggable = ({ children, draggableId, index }) => {
+  return <div data-draggable-id={draggableId} data-index={index}>{children({ innerRef: () => {}, dragHandleProps: {}, draggableProps: {} })}</div>;
+};
 
 const ModuleManagement = () => {
   const { courseId } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const isInstructor = user?.role === 'INSTRUCTOR';
-  
   const [course, setCourse] = useState(null);
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedModule, setSelectedModule] = useState(null);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [moduleLoading, setModuleLoading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedModule, setSelectedModule] = useState(null);
+  const [editMode, setEditMode] = useState(false);
   const [expandedModules, setExpandedModules] = useState({});
-  const [contentByModule, setContentByModule] = useState({});
   
-  // New module form state
   const [newModule, setNewModule] = useState({
     title: '',
-    description: '',
-    orderIndex: 0
+    description: ''
   });
   
   useEffect(() => {
-    if (!isInstructor) {
-      navigate('/');
-      toast.error('Access denied. Instructor permissions required.');
-      return;
+    if (courseId) {
+      fetchCourseDetails();
+      fetchModules();
     }
-    
-    fetchCourseData();
-  }, [courseId, isInstructor, navigate]);
+  }, [courseId]);
   
-  const fetchCourseData = async () => {
+  const fetchCourseDetails = async () => {
     try {
       setLoading(true);
-      
-      // Fetch course details
-      const courseResponse = await courseApi.getCourseById(courseId);
-      setCourse(courseResponse.data);
-      
-      // Fetch modules for this course
-      const modulesResponse = await moduleApi.getModulesByCourse(courseId);
-      
-      // Sort modules by orderIndex
-      const sortedModules = modulesResponse.data.sort((a, b) => a.orderIndex - b.orderIndex);
-      setModules(sortedModules);
-      
-      // Initialize expanded state for all modules
-      const expandedState = {};
-      sortedModules.forEach(module => {
-        expandedState[module.moduleId] = false;
-      });
-      setExpandedModules(expandedState);
-      
-      // Fetch content for each module
-      const contentData = {};
-      await Promise.all(
-        sortedModules.map(async (module) => {
-          try {
-            const contentResponse = await contentApi.getContentByCourse(courseId);
-            // Filter content by moduleId
-            contentData[module.moduleId] = contentResponse.data.filter(
-              content => content.moduleId === module.moduleId
-            );
-          } catch (error) {
-            console.error(`Error fetching content for module ${module.moduleId}:`, error);
-            contentData[module.moduleId] = [];
-          }
-        })
-      );
-      
-      setContentByModule(contentData);
-      setLoading(false);
+      const response = await courseApi.getCourseById(courseId);
+      setCourse(response.data);
     } catch (error) {
-      console.error('Error fetching course data:', error);
-      toast.error('Failed to load course data');
+      console.error('Error fetching course details:', error);
+      toast.error('Failed to load course details');
+    } finally {
       setLoading(false);
     }
   };
   
-  const handleCreateModule = () => {
+  const fetchModules = async () => {
+    try {
+      setModuleLoading(true);
+      console.log('Fetching modules for course ID:', courseId);
+      const response = await moduleApi.getModulesByCourse(courseId);
+      console.log('Modules response:', response);
+      setModules(response.data || []);
+      
+      // Initialize expanded state
+      const expandedState = {};
+      if (response.data && response.data.length > 0) {
+        response.data.forEach(module => {
+          expandedState[module.moduleId] = false;
+        });
+      }
+      setExpandedModules(expandedState);
+    } catch (error) {
+      console.error('Error fetching modules:', error);
+      toast.error('Failed to load modules');
+    } finally {
+      setModuleLoading(false);
+    }
+  };
+  
+  const handleOpenDialog = () => {
+    setEditMode(false);
     setNewModule({
       title: '',
-      description: '',
-      orderIndex: modules.length // Set as the last module by default
+      description: ''
     });
-    setCreateDialogOpen(true);
+    setDialogOpen(true);
   };
   
-  const handleEditModule = (module) => {
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+  };
+  
+  const handleOpenEditDialog = (module) => {
+    setEditMode(true);
     setSelectedModule(module);
-    setEditDialogOpen(true);
+    setNewModule({
+      title: module.title,
+      description: module.description || ''
+    });
+    setDialogOpen(true);
   };
   
-  const handleDeleteModule = (module) => {
+  const handleOpenDeleteDialog = (module) => {
     setSelectedModule(module);
     setDeleteDialogOpen(true);
   };
   
-  const handleToggleExpand = (moduleId) => {
-    setExpandedModules(prev => ({
-      ...prev,
-      [moduleId]: !prev[moduleId]
-    }));
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
   };
   
-  const handleSubmitNewModule = async () => {
+  const handleModuleChange = (e) => {
+    const { name, value } = e.target;
+    setNewModule({
+      ...newModule,
+      [name]: value
+    });
+  };
+  
+  const handleCreateModule = async () => {
+    if (!newModule.title.trim()) {
+      toast.error('Please enter a module title');
+      return;
+    }
+    
     try {
-      // Validate required fields
-      if (!newModule.title) {
-        toast.error('Module title is required');
-        return;
-      }
-      
-      // Prepare module data
       const moduleData = {
-        ...newModule,
-        courseId: Number(courseId)
+        title: newModule.title,
+        description: newModule.description || '',
+        courseId: parseInt(courseId)
       };
       
-      // Create new module
+      console.log('Creating module with data:', moduleData);
       const response = await moduleApi.createModule(moduleData);
+      console.log('Module created:', response.data);
       
-      // Update modules list with the new module
+      // Update modules list
       setModules([...modules, response.data]);
       
-      // Initialize expanded state and content for the new module
-      setExpandedModules(prev => ({
-        ...prev,
+      // Update expanded state
+      setExpandedModules({
+        ...expandedModules,
         [response.data.moduleId]: false
-      }));
-      
-      setContentByModule(prev => ({
-        ...prev,
-        [response.data.moduleId]: []
-      }));
+      });
       
       toast.success('Module created successfully');
-      setCreateDialogOpen(false);
+      handleCloseDialog();
     } catch (error) {
       console.error('Error creating module:', error);
-      toast.error('Failed to create module');
+      toast.error('Failed to create module: ' + (error.response?.data?.message || error.message));
     }
   };
   
   const handleUpdateModule = async () => {
+    if (!newModule.title.trim()) {
+      toast.error('Please enter a module title');
+      return;
+    }
+    
     try {
-      // Validate required fields
-      if (!selectedModule.title) {
-        toast.error('Module title is required');
-        return;
-      }
-      
-      // Prepare module data
       const moduleData = {
-        title: selectedModule.title,
-        description: selectedModule.description,
-        orderIndex: selectedModule.orderIndex
+        title: newModule.title,
+        description: newModule.description || ''
       };
       
-      // Update module
       await moduleApi.updateModule(selectedModule.moduleId, moduleData);
       
-      // Update modules list with the updated module
+      // Update modules list
       setModules(modules.map(m => 
-        m.moduleId === selectedModule.moduleId ? { ...m, ...moduleData } : m
+        m.moduleId === selectedModule.moduleId 
+          ? { ...m, ...moduleData } 
+          : m
       ));
       
       toast.success('Module updated successfully');
-      setEditDialogOpen(false);
+      handleCloseDialog();
     } catch (error) {
       console.error('Error updating module:', error);
       toast.error('Failed to update module');
     }
   };
   
-  const handleConfirmDelete = async () => {
+  const handleDeleteModule = async () => {
     try {
-      // Check if module has content
-      const moduleContent = contentByModule[selectedModule.moduleId] || [];
-      if (moduleContent.length > 0) {
-        toast.error('Cannot delete module with content. Please remove all content first.');
-        setDeleteDialogOpen(false);
-        return;
-      }
-      
-      // Delete module
       await moduleApi.deleteModule(selectedModule.moduleId);
       
       // Update modules list
       setModules(modules.filter(m => m.moduleId !== selectedModule.moduleId));
       
-      // Remove from expanded state and content mapping
-      const updatedExpandedModules = { ...expandedModules };
-      delete updatedExpandedModules[selectedModule.moduleId];
-      setExpandedModules(updatedExpandedModules);
-      
-      const updatedContentByModule = { ...contentByModule };
-      delete updatedContentByModule[selectedModule.moduleId];
-      setContentByModule(updatedContentByModule);
+      // Update expanded state
+      const newExpandedState = { ...expandedModules };
+      delete newExpandedState[selectedModule.moduleId];
+      setExpandedModules(newExpandedState);
       
       toast.success('Module deleted successfully');
-      setDeleteDialogOpen(false);
+      handleCloseDeleteDialog();
     } catch (error) {
       console.error('Error deleting module:', error);
       toast.error('Failed to delete module');
@@ -250,18 +237,13 @@ const ModuleManagement = () => {
   };
   
   const handleDragEnd = async (result) => {
-    // Drop outside the list
     if (!result.destination) return;
     
-    // Same position
-    if (result.destination.index === result.source.index) return;
-    
-    // Reorder module list
-    const reorderedModules = Array.from(modules);
+    const reorderedModules = [...modules];
     const [movedModule] = reorderedModules.splice(result.source.index, 1);
     reorderedModules.splice(result.destination.index, 0, movedModule);
     
-    // Update orderIndex for all modules
+    // Update the order index of modules
     const updatedModules = reorderedModules.map((module, index) => ({
       ...module,
       orderIndex: index
@@ -269,30 +251,32 @@ const ModuleManagement = () => {
     
     setModules(updatedModules);
     
-    // Update order on the server
+    // Save the new order to the backend
     try {
-      await moduleApi.updateModuleOrder(courseId, 
-        updatedModules.map(m => ({ 
-          moduleId: m.moduleId, 
-          orderIndex: m.orderIndex 
-        }))
-      );
-      toast.success('Module order updated');
+      const moduleOrderData = updatedModules.map((module, index) => ({
+        moduleId: module.moduleId,
+        orderIndex: index
+      }));
+      
+      await moduleApi.updateModuleOrder(courseId, moduleOrderData);
     } catch (error) {
       console.error('Error updating module order:', error);
       toast.error('Failed to update module order');
-      // Revert to original order on error
-      fetchCourseData();
+      // Revert to original order by refetching
+      fetchModules();
     }
   };
   
-  const handleAddContent = () => {
-    navigate(`/instructor/courses/${courseId}/content`);
+  const toggleExpandModule = (moduleId) => {
+    setExpandedModules(prev => ({
+      ...prev,
+      [moduleId]: !prev[moduleId]
+    }));
   };
   
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '70vh' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
         <CircularProgress />
       </Box>
     );
@@ -300,232 +284,181 @@ const ModuleManagement = () => {
   
   return (
     <Box sx={{ p: 3 }}>
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography variant="h4" gutterBottom>
-              {course?.title || 'Course Modules'}
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Organize your course content into modules
-            </Typography>
-          </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          {course ? `Module Management: ${course.title}` : 'Module Management'}
+        </Typography>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={handleOpenDialog}
+        >
+          Add Module
+        </Button>
+      </Box>
+      
+      {moduleLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+          <CircularProgress />
+        </Box>
+      ) : modules.length === 0 ? (
+        <Paper sx={{ p: 4, textAlign: 'center' }}>
+          <FolderIcon sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
+          <Typography variant="h6" gutterBottom>
+            No Modules Yet
+          </Typography>
+          <Typography variant="body1" color="text.secondary" paragraph>
+            Create modules to organize your course content.
+          </Typography>
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
-            onClick={handleCreateModule}
+            onClick={handleOpenDialog}
           >
-            Create Module
+            Create Your First Module
           </Button>
-        </Box>
-        
-        {modules.length === 0 ? (
-          <Card sx={{ textAlign: 'center', p: 3 }}>
-            <CardContent>
-              <FolderIcon sx={{ fontSize: 60, color: 'action.disabled', mb: 2 }} />
-              <Typography variant="h6" gutterBottom>
-                No Modules Yet
-              </Typography>
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Start organizing your course by creating modules.
-              </Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleCreateModule}
-              >
-                Create Your First Module
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Paper sx={{ mt: 2 }}>
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="modules">
-                {(provided) => (
-                  <List {...provided.droppableProps} ref={provided.innerRef}>
-                    {modules.map((module, index) => (
-                      <Draggable 
-                        key={module.moduleId.toString()} 
-                        draggableId={module.moduleId.toString()} 
-                        index={index}
-                      >
-                        {(provided) => (
-                          <div ref={provided.innerRef} {...provided.draggableProps}>
-                            <Paper sx={{ mb: 2, overflow: 'hidden' }}>
-                              <ListItem 
-                                sx={{ 
-                                  bgcolor: 'background.paper',
-                                  borderBottom: expandedModules[module.moduleId] ? 1 : 0,
-                                  borderColor: 'divider'
-                                }}
-                              >
-                                <ListItemIcon {...provided.dragHandleProps}>
-                                  <DragIcon />
-                                </ListItemIcon>
+        </Paper>
+      ) : (
+        <Paper sx={{ p: 2 }}>
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Organize your modules to structure your course content.
+          </Alert>
+          
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="moduleList">
+              {(provided) => (
+                <List
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
+                  sx={{ width: '100%' }}
+                >
+                  {modules.map((module, index) => (
+                    <Draggable 
+                      key={module.moduleId.toString()} 
+                      draggableId={module.moduleId.toString()} 
+                      index={index}
+                    >
+                      {(provided) => (
+                        <div 
+                          ref={provided.innerRef} 
+                          {...provided.draggableProps}
+                        >
+                          <Card sx={{ mb: 2 }}>
+                            <CardContent sx={{ p: 0 }}>
+                              <ListItem>
+                                <div {...provided.dragHandleProps}>
+                                  <ListItemIcon>
+                                    <DragIcon />
+                                  </ListItemIcon>
+                                </div>
                                 <ListItemText
                                   primary={
-                                    <Typography variant="h6">
-                                      {index + 1}. {module.title}
-                                    </Typography>
+                                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                      <Typography variant="subtitle1">
+                                        {module.title}
+                                      </Typography>
+                                      <IconButton 
+                                        size="small" 
+                                        onClick={() => toggleExpandModule(module.moduleId)}
+                                      >
+                                        {expandedModules[module.moduleId] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                                      </IconButton>
+                                    </Box>
                                   }
-                                  secondary={module.description}
+                                  secondary={module.description || 'No description'}
                                 />
                                 <ListItemSecondaryAction>
-                                  <IconButton edge="end" onClick={() => handleToggleExpand(module.moduleId)}>
-                                    {expandedModules[module.moduleId] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                                  </IconButton>
-                                  <IconButton edge="end" onClick={() => handleEditModule(module)}>
-                                    <EditIcon />
-                                  </IconButton>
-                                  <IconButton edge="end" onClick={() => handleDeleteModule(module)}>
-                                    <DeleteIcon />
-                                  </IconButton>
+                                  <Tooltip title="Edit Module">
+                                    <IconButton 
+                                      edge="end" 
+                                      aria-label="edit" 
+                                      onClick={() => handleOpenEditDialog(module)}
+                                    >
+                                      <EditIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Delete Module">
+                                    <IconButton 
+                                      edge="end" 
+                                      aria-label="delete" 
+                                      color="error"
+                                      onClick={() => handleOpenDeleteDialog(module)}
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </Tooltip>
                                 </ListItemSecondaryAction>
                               </ListItem>
-                              <Collapse in={expandedModules[module.moduleId]} timeout="auto" unmountOnExit>
-                                <Box sx={{ p: 2 }}>
-                                  <Typography variant="subtitle1" gutterBottom>
-                                    Content in this module:
-                                  </Typography>
-                                  {(contentByModule[module.moduleId]?.length > 0) ? (
-                                    <List dense>
-                                      {contentByModule[module.moduleId].map((content) => (
-                                        <ListItem key={content.contentId}>
-                                          <ListItemText
-                                            primary={content.title}
-                                            secondary={`Type: ${content.type}`}
-                                          />
-                                        </ListItem>
-                                      ))}
-                                    </List>
-                                  ) : (
-                                    <Typography variant="body2" color="text.secondary">
-                                      No content in this module yet.
-                                    </Typography>
-                                  )}
-                                  <Button
-                                    variant="outlined"
-                                    size="small"
-                                    startIcon={<AddIcon />}
-                                    onClick={handleAddContent}
-                                    sx={{ mt: 1 }}
-                                  >
-                                    Add Content
-                                  </Button>
-                                </Box>
-                              </Collapse>
-                            </Paper>
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                  </List>
-                )}
-              </Droppable>
-            </DragDropContext>
-          </Paper>
-        )}
-      </Paper>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </List>
+              )}
+            </Droppable>
+          </DragDropContext>
+        </Paper>
+      )}
       
-      {/* Create Module Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create New Module</DialogTitle>
+      {/* Create/Edit Module Dialog */}
+      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>{editMode ? 'Edit Module' : 'Create Module'}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
-            margin="normal"
+            margin="dense"
+            name="title"
             label="Module Title"
+            type="text"
             fullWidth
-            required
+            variant="outlined"
             value={newModule.title}
-            onChange={(e) => setNewModule({ ...newModule, title: e.target.value })}
+            onChange={handleModuleChange}
+            sx={{ mb: 2 }}
           />
+          
           <TextField
-            margin="normal"
+            margin="dense"
+            name="description"
             label="Description"
+            type="text"
             fullWidth
+            variant="outlined"
             multiline
             rows={3}
             value={newModule.description}
-            onChange={(e) => setNewModule({ ...newModule, description: e.target.value })}
-          />
-          <TextField
-            margin="normal"
-            label="Order Index"
-            type="number"
-            fullWidth
-            value={newModule.orderIndex}
-            onChange={(e) => setNewModule({ ...newModule, orderIndex: parseInt(e.target.value) || 0 })}
+            onChange={handleModuleChange}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmitNewModule} variant="contained" color="primary">
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Edit Module Dialog */}
-      <Dialog open={editDialogOpen} onClose={() => setEditDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Module</DialogTitle>
-        <DialogContent>
-          {selectedModule && (
-            <>
-              <TextField
-                autoFocus
-                margin="normal"
-                label="Module Title"
-                fullWidth
-                required
-                value={selectedModule.title}
-                onChange={(e) => setSelectedModule({ ...selectedModule, title: e.target.value })}
-              />
-              <TextField
-                margin="normal"
-                label="Description"
-                fullWidth
-                multiline
-                rows={3}
-                value={selectedModule.description}
-                onChange={(e) => setSelectedModule({ ...selectedModule, description: e.target.value })}
-              />
-              <TextField
-                margin="normal"
-                label="Order Index"
-                type="number"
-                fullWidth
-                value={selectedModule.orderIndex}
-                onChange={(e) => setSelectedModule({ ...selectedModule, orderIndex: parseInt(e.target.value) || 0 })}
-              />
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleUpdateModule} variant="contained" color="primary">
-            Update
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button 
+            onClick={editMode ? handleUpdateModule : handleCreateModule} 
+            variant="contained" 
+            color="primary"
+          >
+            {editMode ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
       
       {/* Delete Module Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
         <DialogTitle>Delete Module</DialogTitle>
         <DialogContent>
           <Typography>
-            Are you sure you want to delete module "{selectedModule?.title}"?
+            Are you sure you want to delete the module "{selectedModule?.title}"? 
+            This will also delete all content within this module.
           </Typography>
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This action cannot be undone. Modules with content cannot be deleted.
-          </Alert>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} variant="contained" color="error">
+          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <Button onClick={handleDeleteModule} variant="contained" color="error">
             Delete
           </Button>
         </DialogActions>

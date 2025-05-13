@@ -1,3 +1,4 @@
+// src/pages/instructor/ContentUpload.jsx - Fixed version
 import React, { useState, useEffect } from 'react'
 import {
   Box,
@@ -10,9 +11,6 @@ import {
   Select,
   MenuItem,
   Grid,
-  Card,
-  CardContent,
-  CardActions,
   IconButton,
   Dialog,
   DialogTitle,
@@ -26,6 +24,8 @@ import {
   ListItemText,
   ListItemIcon,
   ListItemSecondaryAction,
+  Alert,
+  Snackbar
 } from '@mui/material'
 import {
   CloudUpload as CloudUploadIcon,
@@ -36,10 +36,11 @@ import {
   Link as LinkIcon,
   Assignment as AssignmentIcon,
   Add as AddIcon,
+  TextFields as TextIcon
 } from '@mui/icons-material'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { contentApi, courseApi } from '../../services/api'
+import { contentApi, courseApi, moduleApi } from '../../services/api'
 import { toast } from 'react-toastify'
 
 const ContentUpload = () => {
@@ -49,33 +50,33 @@ const ContentUpload = () => {
   
   const [course, setCourse] = useState(null)
   const [content, setContent] = useState([])
+  const [modules, setModules] = useState([])
   const [loading, setLoading] = useState(true)
   const [contentLoading, setContentLoading] = useState(false)
+  const [modulesLoading, setModulesLoading] = useState(false)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedContent, setSelectedContent] = useState(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [showError, setShowError] = useState(false)
   
   const [newContent, setNewContent] = useState({
     title: '',
     description: '',
-    type: 'VIDEO',
+    type: 'PDF',
     file: null,
     externalUrl: '',
     moduleId: '',
+    content: ''
   })
-  
-  const [modules, setModules] = useState([
-    { id: 'module1', name: 'Module 1: Introduction' },
-    { id: 'module2', name: 'Module 2: Core Concepts' },
-    { id: 'module3', name: 'Module 3: Advanced Topics' },
-  ])
   
   useEffect(() => {
     if (courseId) {
       fetchCourseDetails()
       fetchCourseContent()
+      fetchModules()
     }
   }, [courseId])
   
@@ -105,6 +106,19 @@ const ContentUpload = () => {
     }
   }
   
+  const fetchModules = async () => {
+    try {
+      setModulesLoading(true)
+      const response = await moduleApi.getModulesByCourse(courseId)
+      setModules(response.data || [])
+    } catch (error) {
+      console.error('Error fetching modules:', error)
+      toast.error('Failed to load modules')
+    } finally {
+      setModulesLoading(false)
+    }
+  }
+  
   const handleOpenUploadDialog = () => {
     setUploadDialogOpen(true)
   }
@@ -114,10 +128,11 @@ const ContentUpload = () => {
     setNewContent({
       title: '',
       description: '',
-      type: 'VIDEO',
+      type: 'PDF',
       file: null,
       externalUrl: '',
       moduleId: '',
+      content: ''
     })
     setUploadProgress(0)
   }
@@ -152,25 +167,35 @@ const ContentUpload = () => {
   const handleUploadContent = async () => {
     // Validate form
     if (!newContent.title) {
-      toast.error('Please enter a title')
+      setErrorMessage('Please enter a title')
+      setShowError(true)
+      return
+    }
+    
+    if (!newContent.moduleId) {
+      setErrorMessage('Please select a module')
+      setShowError(true)
       return
     }
     
     if (newContent.type === 'VIDEO' || newContent.type === 'PDF') {
-      if (!newContent.file) {
-        toast.error('Please select a file to upload')
+      if (!newContent.file && !newContent.externalUrl) {
+        setErrorMessage('Please select a file to upload or provide a URL')
+        setShowError(true)
         return
       }
     } else if (newContent.type === 'LINK') {
       if (!newContent.externalUrl) {
-        toast.error('Please enter a URL')
+        setErrorMessage('Please enter a URL')
+        setShowError(true)
         return
       }
-    }
-    
-    if (!newContent.moduleId) {
-      toast.error('Please select a module')
-      return
+    } else if (newContent.type === 'TEXT') {
+      if (!newContent.content) {
+        setErrorMessage('Please enter some text content')
+        setShowError(true)
+        return
+      }
     }
     
     try {
@@ -188,38 +213,47 @@ const ContentUpload = () => {
       }, 300)
       
       // Prepare content data
-      let contentData = {}
-      if (newContent.type === 'LINK') {
-        contentData = {
-          title: newContent.title,
-          description: newContent.description,
-          type: newContent.type,
-          moduleId: newContent.moduleId ? Number(newContent.moduleId) : undefined,
-          courseId: courseId,
-          urlFileLocation: newContent.externalUrl,
-          fileSize: 1,
-          fileType: 'link',
-          fileName: newContent.title,
-          fileUrl: newContent.externalUrl
-        }
-      } else {
-        contentData = {
-          title: newContent.title,
-          description: newContent.description,
-          type: newContent.type,
-          moduleId: newContent.moduleId ? Number(newContent.moduleId) : undefined,
-          courseId: courseId,
-          file: newContent.file,
-          urlFileLocation: newContent.file ? `https://example.com/files/${newContent.file.name}` : 'https://placeholder-url.com',
-          fileSize: newContent.file ? newContent.file.size : 1024,
-          fileType: newContent.file ? newContent.file.type : 'text/plain',
-          fileName: newContent.file ? newContent.file.name : undefined,
-          fileUrl: newContent.file ? `https://example.com/files/${newContent.file.name}` : undefined
-        }
+      let contentData = {
+        title: newContent.title,
+        description: newContent.description || '',
+        type: newContent.type,
+        moduleId: newContent.moduleId,
+        courseId: courseId
       }
       
-      // Upload content
-      const response = await contentApi.uploadContent(contentData)
+      let response;
+      
+      // Handle different content types
+      if (newContent.type === 'LINK') {
+        // For external links
+        contentData.urlFileLocation = newContent.externalUrl
+        contentData.fileSize = 1024
+        contentData.fileType = 'text/html'
+        contentData.fileName = newContent.title + '.url'
+        
+        response = await contentApi.uploadJsonContent(contentData)
+      } else if (newContent.type === 'TEXT') {
+        // For text content
+        contentData.content = newContent.content
+        contentData.urlFileLocation = 'text://' + Date.now()
+        contentData.fileSize = newContent.content.length
+        contentData.fileType = 'text/plain'
+        contentData.fileName = newContent.title + '.txt'
+        
+        response = await contentApi.uploadJsonContent(contentData)
+      } else {
+        // For file uploads (PDF, VIDEO, etc.)
+        if (newContent.file) {
+          contentData.file = newContent.file
+        } else if (newContent.externalUrl) {
+          contentData.urlFileLocation = newContent.externalUrl
+          contentData.fileSize = 1024
+          contentData.fileType = newContent.type === 'PDF' ? 'application/pdf' : 'video/mp4'
+          contentData.fileName = newContent.title + (newContent.type === 'PDF' ? '.pdf' : '.mp4')
+        }
+        
+        response = await contentApi.uploadContent(contentData)
+      }
       
       // Complete progress
       clearInterval(progressInterval)
@@ -232,7 +266,8 @@ const ContentUpload = () => {
       handleCloseUploadDialog()
     } catch (error) {
       console.error('Error uploading content:', error)
-      toast.error('Failed to upload content')
+      setErrorMessage('Failed to upload content: ' + (error.response?.data?.message || error.message))
+      setShowError(true)
     } finally {
       setUploading(false)
       setUploadProgress(0)
@@ -241,8 +276,8 @@ const ContentUpload = () => {
   
   const handleDeleteContent = async () => {
     try {
-      await contentApi.deleteContent(selectedContent.id)
-      setContent(content.filter(item => item.id !== selectedContent.id))
+      await contentApi.deleteContent(selectedContent.contentId)
+      setContent(content.filter(item => item.contentId !== selectedContent.contentId))
       toast.success('Content deleted successfully')
       handleCloseDeleteDialog()
     } catch (error) {
@@ -261,6 +296,8 @@ const ContentUpload = () => {
         return <LinkIcon color="info" />
       case 'QUIZ':
         return <AssignmentIcon color="warning" />
+      case 'TEXT':
+        return <TextIcon color="success" />
       default:
         return <CloudUploadIcon />
     }
@@ -296,19 +333,35 @@ const ContentUpload = () => {
             <Typography variant="h6" gutterBottom>
               Modules
             </Typography>
-            <List>
-              {modules.map((module) => (
-                <ListItem key={module.id} button>
-                  <ListItemText primary={module.name} />
-                </ListItem>
-              ))}
-              <ListItem button>
-                <ListItemIcon>
-                  <AddIcon />
-                </ListItemIcon>
-                <ListItemText primary="Add Module" />
-              </ListItem>
-            </List>
+            {modulesLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : modules.length === 0 ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                No modules have been created yet.
+              </Alert>
+            ) : (
+              <List>
+                {modules.map((module) => (
+                  <ListItem key={module.moduleId} button>
+                    <ListItemText 
+                      primary={module.title} 
+                      secondary={`${content.filter(c => c.moduleId === module.moduleId).length} items`} 
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={() => navigate(`/instructor/courses/${courseId}/modules`)}
+              sx={{ mt: 2 }}
+            >
+              Manage Modules
+            </Button>
           </Paper>
         </Grid>
         
@@ -333,41 +386,52 @@ const ContentUpload = () => {
                   startIcon={<CloudUploadIcon />}
                   onClick={handleOpenUploadDialog}
                   sx={{ mt: 2 }}
+                  disabled={modules.length === 0}
                 >
                   Upload Your First Content
                 </Button>
+                
+                {modules.length === 0 && (
+                  <Alert severity="warning" sx={{ mt: 2, mx: 'auto', maxWidth: 450 }}>
+                    You need to create at least one module before you can add content.
+                  </Alert>
+                )}
               </Box>
             ) : (
               <List>
-                {content.map((item) => (
-                  <React.Fragment key={item.id}>
-                    <ListItem>
-                      <ListItemIcon>
-                        {getContentIcon(item.type)}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={item.title}
-                        secondary={
-                          <>
-                            <Typography component="span" variant="body2" color="text.primary">
-                              {item.type}
-                            </Typography>
-                            {item.description && ` — ${item.description}`}
-                          </>
-                        }
-                      />
-                      <ListItemSecondaryAction>
-                        <IconButton edge="end" aria-label="edit">
-                          <EditIcon />
-                        </IconButton>
-                        <IconButton edge="end" aria-label="delete" onClick={() => handleOpenDeleteDialog(item)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </ListItemSecondaryAction>
-                    </ListItem>
-                    <Divider variant="inset" component="li" />
-                  </React.Fragment>
-                ))}
+                {content.map((item) => {
+                  const moduleTitle = modules.find(m => m.moduleId === item.moduleId)?.title || 'No Module';
+                  
+                  return (
+                    <React.Fragment key={item.contentId}>
+                      <ListItem>
+                        <ListItemIcon>
+                          {getContentIcon(item.type)}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={item.title}
+                          secondary={
+                            <>
+                              <Typography component="span" variant="body2" color="text.primary">
+                                {item.type} · Module: {moduleTitle}
+                              </Typography>
+                              {item.description && ` — ${item.description}`}
+                            </>
+                          }
+                        />
+                        <ListItemSecondaryAction>
+                          <IconButton edge="end" aria-label="edit">
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton edge="end" aria-label="delete" onClick={() => handleOpenDeleteDialog(item)}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </ListItemSecondaryAction>
+                      </ListItem>
+                      <Divider variant="inset" component="li" />
+                    </React.Fragment>
+                  );
+                })}
               </List>
             )}
           </Paper>
@@ -389,6 +453,7 @@ const ContentUpload = () => {
             value={newContent.title}
             onChange={handleContentChange}
             sx={{ mb: 2 }}
+            required
           />
           
           <TextField
@@ -405,7 +470,7 @@ const ContentUpload = () => {
             sx={{ mb: 2 }}
           />
           
-          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }} required>
             <InputLabel id="content-type-label">Content Type</InputLabel>
             <Select
               labelId="content-type-label"
@@ -414,14 +479,14 @@ const ContentUpload = () => {
               onChange={handleContentChange}
               label="Content Type"
             >
-              <MenuItem value="VIDEO">Video</MenuItem>
               <MenuItem value="PDF">PDF Document</MenuItem>
+              <MenuItem value="VIDEO">Video</MenuItem>
               <MenuItem value="LINK">External Link</MenuItem>
-              <MenuItem value="QUIZ">Quiz</MenuItem>
+              <MenuItem value="TEXT">Text Content</MenuItem>
             </Select>
           </FormControl>
           
-          <FormControl fullWidth margin="dense" sx={{ mb: 2 }}>
+          <FormControl fullWidth margin="dense" sx={{ mb: 2 }} required>
             <InputLabel id="module-label">Module</InputLabel>
             <Select
               labelId="module-label"
@@ -431,29 +496,46 @@ const ContentUpload = () => {
               label="Module"
             >
               {modules.map((module) => (
-                <MenuItem key={module.id} value={module.id}>
-                  {module.name}
+                <MenuItem key={module.moduleId} value={module.moduleId}>
+                  {module.title}
                 </MenuItem>
               ))}
             </Select>
           </FormControl>
           
           {(newContent.type === 'VIDEO' || newContent.type === 'PDF') && (
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<CloudUploadIcon />}
-              fullWidth
-              sx={{ mb: 2 }}
-            >
-              {newContent.file ? newContent.file.name : `Upload ${newContent.type === 'VIDEO' ? 'Video' : 'PDF'}`}
-              <input
-                type="file"
-                hidden
-                accept={newContent.type === 'VIDEO' ? 'video/*' : 'application/pdf'}
-                onChange={handleFileChange}
+            <>
+              <Button
+                variant="outlined"
+                component="label"
+                startIcon={<CloudUploadIcon />}
+                fullWidth
+                sx={{ mb: 1 }}
+              >
+                {newContent.file ? newContent.file.name : `Upload ${newContent.type === 'VIDEO' ? 'Video' : 'PDF'}`}
+                <input
+                  type="file"
+                  hidden
+                  accept={newContent.type === 'VIDEO' ? 'video/*' : 'application/pdf'}
+                  onChange={handleFileChange}
+                />
+              </Button>
+              
+              <Divider sx={{ my: 2 }}>OR</Divider>
+              
+              <TextField
+                margin="dense"
+                name="externalUrl"
+                label="External URL"
+                type="url"
+                fullWidth
+                variant="outlined"
+                value={newContent.externalUrl}
+                onChange={handleContentChange}
+                helperText={`Enter a direct URL to a ${newContent.type === 'VIDEO' ? 'video' : 'PDF'} file`}
+                sx={{ mb: 2 }}
               />
-            </Button>
+            </>
           )}
           
           {newContent.type === 'LINK' && (
@@ -466,6 +548,23 @@ const ContentUpload = () => {
               variant="outlined"
               value={newContent.externalUrl}
               onChange={handleContentChange}
+              required
+              sx={{ mb: 2 }}
+            />
+          )}
+          
+          {newContent.type === 'TEXT' && (
+            <TextField
+              margin="dense"
+              name="content"
+              label="Text Content"
+              multiline
+              rows={6}
+              fullWidth
+              variant="outlined"
+              value={newContent.content}
+              onChange={handleContentChange}
+              required
               sx={{ mb: 2 }}
             />
           )}
@@ -510,6 +609,18 @@ const ContentUpload = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Error Snackbar */}
+      <Snackbar
+        open={showError}
+        autoHideDuration={6000}
+        onClose={() => setShowError(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setShowError(false)} severity="error" sx={{ width: '100%' }}>
+          {errorMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }

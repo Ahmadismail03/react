@@ -1,3 +1,4 @@
+// src/contexts/AuthContext.jsx (Fixed Version)
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -17,6 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'))
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [isPasswordReset, setIsPasswordReset] = useState(false)
 
   // Configure axios defaults
   // Using empty string as base URL to work with the proxy in vite.config.js
@@ -29,15 +31,28 @@ export const AuthProvider = ({ children }) => {
   // Check token validity on mount
   useEffect(() => {
     const checkAuth = async () => {
+      // Skip token validation if we're in a password reset flow
+      const isResetPasswordPage = window.location.pathname.includes('/reset-password');
+      
+      if (isResetPasswordPage) {
+        setLoading(false);
+        setIsPasswordReset(true);
+        return;
+      }
+      
       if (token) {
         try {
           const response = await axios.get('/api/auth/me')
           setUser(response.data)
         } catch (err) {
           console.error('Token validation failed:', err)
-          localStorage.removeItem('token')
-          setToken(null)
-          setUser(null)
+          
+          // Don't clear token if we're in reset password flow
+          if (!isResetPasswordPage) {
+            localStorage.removeItem('token')
+            setToken(null)
+            setUser(null)
+          }
         }
       }
       setLoading(false)
@@ -121,7 +136,8 @@ export const AuthProvider = ({ children }) => {
     login,
     register,
     logout,
-    isAuthenticated: !!token,
+    isPasswordReset,
+    isAuthenticated: !!token && !isPasswordReset,
   }
 
   if (loading) {
